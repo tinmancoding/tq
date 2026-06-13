@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+
+# local data
+*.db
+*.db-shm
+*.db-wal
+attachments/
+.tq-data/
+
+# os
+.DS_Store

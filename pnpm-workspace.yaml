@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+
+verifyDepsBeforeRun: false
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+allowBuilds:
+  esbuild: set this to true or false
