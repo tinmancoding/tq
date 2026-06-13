@@ -12,6 +12,11 @@ export {
   type PromoteInput,
 } from "./domain/intake.js";
 export { JobRepo, type TriageJob } from "./domain/job.js";
+export {
+  AttachmentRepo,
+  type AttachmentMeta,
+  type IntakeAttachment,
+} from "./domain/attachment.js";
 
 export {
   search,

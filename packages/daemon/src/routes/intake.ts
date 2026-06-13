@@ -8,26 +8,43 @@ const IntakeStatusEnum = Type.Union(INTAKE_STATUSES.map((s) => Type.Literal(s)))
 const LabelSchema = Type.Object({ key: Type.String(), value: Type.String() });
 
 export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
-  // Create (JSON). Multipart image upload arrives in Phase 2.
+  // Create — accepts JSON or multipart/form-data (text + image files).
   app.post(
     "/api/intake",
-    {
-      schema: {
-        body: Type.Object({
-          text: Type.Optional(Type.String()),
-          body: Type.Optional(Type.String()),
-          source: Type.Optional(Type.String()),
-          source_ref: Type.Optional(Type.String()),
-          labels: Type.Optional(Type.Record(Type.String(), Type.String())),
-          action_verbs: Type.Optional(Type.Array(Type.String())),
-        }),
-        querystring: Type.Object({
-          wait: Type.Optional(Type.Boolean()),
-        }),
-      },
-    },
+    { schema: { querystring: Type.Object({ wait: Type.Optional(Type.Boolean()) }) } },
     async (req, reply) => {
-      const b = req.body as Record<string, unknown>;
+      if (typeof req.isMultipart === "function" && req.isMultipart()) {
+        const fields: Record<string, string> = {};
+        const images: { buf: Buffer; mime: string; filename: string | null }[] = [];
+        for await (const part of req.parts()) {
+          if (part.type === "file") {
+            images.push({
+              buf: await part.toBuffer(),
+              mime: part.mimetype || "application/octet-stream",
+              filename: part.filename ?? null,
+            });
+          } else {
+            fields[part.fieldname] = String(part.value);
+          }
+        }
+        const { intake } = store.intake.create({
+          body: fields.text ?? fields.body ?? null,
+          source: fields.source ?? "manual",
+          labels: parseJsonField<Record<string, string>>(fields.labels),
+          action_verbs: parseJsonField<string[]>(fields.verbs),
+          deferTriage: true,
+        });
+        images.forEach((img, i) => {
+          const sha = store.attachments.store(img.buf, { mime: img.mime });
+          store.attachments.link(intake.id, sha, img.filename, i);
+        });
+        store.intake.queueTriage(intake.id);
+        reply.code(202).send(store.intake.get(intake.id));
+        return;
+      }
+
+      // JSON path
+      const b = (req.body ?? {}) as Record<string, unknown>;
       const { intake } = store.intake.create({
         body: ((b.body as string) ?? (b.text as string)) ?? null,
         source: (b.source as string) ?? "manual",
@@ -35,8 +52,6 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
         labels: b.labels as Record<string, string> | undefined,
         action_verbs: b.action_verbs as string[] | undefined,
       });
-      // ?wait=true would block for triage; triage worker lands in Phase 2, so
-      // for now we always return 202 immediately.
       reply.code(202).send(intake);
     },
   );
@@ -70,7 +85,11 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
     const id = store.intake.resolveId((req.params as { id: string }).id);
     if (!id) return reply.code(404).send({ error: "intake not found" });
     const intake = store.intake.get(id)!;
-    return { ...intake, linked_task_ids: store.intake.linkedTaskIds(id) };
+    return {
+      ...intake,
+      linked_task_ids: store.intake.linkedTaskIds(id),
+      attachments: store.attachments.forIntake(id),
+    };
   });
 
   app.post(
@@ -105,8 +124,7 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
       const b = req.body as { task_id: string; relation?: string };
       const taskId = store.tasks.resolveId(b.task_id);
       if (!taskId) return reply.code(404).send({ error: "task not found" });
-      const result = store.intake.link(id, taskId, b.relation ?? "linked");
-      return result;
+      return store.intake.link(id, taskId, b.relation ?? "linked");
     },
   );
 
@@ -125,4 +143,13 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
     if (!id) return reply.code(404).send({ error: "intake not found" });
     return store.intake.retriage(id);
   });
+}
+
+function parseJsonField<T>(value: string | undefined): T | undefined {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
 }

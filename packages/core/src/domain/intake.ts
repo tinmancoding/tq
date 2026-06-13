@@ -20,6 +20,8 @@ export interface CreateIntakeInput {
   action_verbs?: string[];
   labels?: Record<string, string>;
   watchlist_id?: string | null;
+  /** When true, do not enqueue a triage job yet (caller will after linking attachments). */
+  deferTriage?: boolean;
 }
 
 export interface PromoteInput {
@@ -98,13 +100,18 @@ export class IntakeRepo {
           return;
         }
       }
-      this.enqueueJob(createdId, ts);
+      if (!input.deferTriage) this.enqueueJob(createdId, ts);
     });
     tx();
 
     const intake = this.get(createdId)!;
     if (created) this.bus.emit("intake.created", intake);
     return { intake, created };
+  }
+
+  /** Enqueue a triage job for an intake (used after deferred capture). */
+  queueTriage(id: string): void {
+    this.enqueueJob(id, now());
   }
 
   get(id: string): Intake | null {

@@ -5,7 +5,11 @@ import { TitanEmbedder } from "./embeddings/titan.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const store = Store.open({ path: config.daemon.db_path, embeddingDims: config.embeddings.dims });
+  const store = Store.open({
+    path: config.daemon.db_path,
+    embeddingDims: config.embeddings.dims,
+    attachmentsDir: config.daemon.attachments_dir,
+  });
 
   // Crash recovery: requeue any jobs left mid-flight by a previous run.
   const recovered = store.jobs.recoverRunning();
@@ -36,6 +40,12 @@ async function main(): Promise<void> {
       maxAttempts: config.triage.max_attempts,
       autoCreateConfidence: config.triage.auto_create_confidence,
       embedder,
+      loadImages: (intakeId) =>
+        store.attachments
+          .forIntake(intakeId)
+          .filter((a) => a.mime.startsWith("image/"))
+          .map((a) => ({ mediaType: a.mime, dataBase64: store.attachments.readBase64(a.sha256) ?? "" }))
+          .filter((img) => img.dataBase64.length > 0),
     });
     pool.start();
     // eslint-disable-next-line no-console

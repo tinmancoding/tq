@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
+import { basename, extname } from "node:path";
 import { Client, CliError, EXIT } from "./client.js";
 import {
   emit,
@@ -204,6 +206,7 @@ intake
   .command("add")
   .description("capture a new intake")
   .option("--text <text>", "pasted text")
+  .option("--image <file>", "attach an image (repeatable)", collect, [])
   .option("--label <k=v>", "label (repeatable)", collect, [])
   .option("--verb <verb>", "action verb (repeatable)", collect, [])
   .option("--wait", "wait for triage (Phase 2)")
@@ -214,12 +217,28 @@ intake
       const { key, value } = parseLabelArg(l);
       labels[key] = value;
     }
-    const path = opts.wait ? "/api/intake?wait=true" : "/api/intake";
-    const item = await client().post(path, {
-      text: opts.text,
-      labels: Object.keys(labels).length ? labels : undefined,
-      action_verbs: (opts.verb as string[]).length ? opts.verb : undefined,
-    });
+    const verbs = opts.verb as string[];
+    const imageFiles = opts.image as string[];
+
+    let item: unknown;
+    if (imageFiles.length > 0) {
+      const form = new FormData();
+      if (opts.text) form.set("text", opts.text);
+      if (Object.keys(labels).length) form.set("labels", JSON.stringify(labels));
+      if (verbs.length) form.set("verbs", JSON.stringify(verbs));
+      for (const file of imageFiles) {
+        const buf = readFileSync(file);
+        const blob = new Blob([new Uint8Array(buf)], { type: mimeFromPath(file) });
+        form.append("image", blob, basename(file));
+      }
+      item = await client().postMultipart("/api/intake", form);
+    } else {
+      item = await client().post("/api/intake", {
+        text: opts.text,
+        labels: Object.keys(labels).length ? labels : undefined,
+        action_verbs: verbs.length ? verbs : undefined,
+      });
+    }
     opts.json ? emit(item, true) : process.stdout.write(`captured ${shortId((item as { id: string }).id)}\n`);
   });
 
@@ -340,6 +359,17 @@ function collect(value: string, prev: string[]): string[] {
 function normalizeLabel(s: string): string {
   const { key, value } = parseLabelArg(s);
   return `${key}:${value}`;
+}
+function mimeFromPath(path: string): string {
+  const ext = extname(path).toLowerCase();
+  const map: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+  };
+  return map[ext] ?? "application/octet-stream";
 }
 
 interface ActivityItem {

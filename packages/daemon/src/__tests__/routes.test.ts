@@ -131,3 +131,23 @@ describe("health", () => {
     expect(res.json().counts).toHaveProperty("tasks");
   });
 });
+
+describe("attachment serving", () => {
+  it("serves a stored blob by sha with its mime type", async () => {
+    const sha = store.attachments.store(Buffer.from("PNGDATA"), { mime: "image/png" });
+    const res = await app.inject({ method: "GET", url: `/api/attachments/${sha}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("image/png");
+    expect(res.body).toBe("PNGDATA");
+  });
+
+  it("400s on a malformed sha and 404s on a missing one", async () => {
+    const bad = await app.inject({ method: "GET", url: "/api/attachments/not-a-hash" });
+    expect(bad.statusCode).toBe(400);
+    const missing = await app.inject({
+      method: "GET",
+      url: `/api/attachments/${"a".repeat(64)}`,
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+});

@@ -74,6 +74,26 @@ export class Client {
   del<T = unknown>(path: string): Promise<T> {
     return this.request<T>("DELETE", path);
   }
+
+  /** Multipart POST for intake capture with image files. */
+  async postMultipart<T = unknown>(path: string, form: FormData): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (this.cfg.client.token) headers["x-tq-token"] = this.cfg.client.token;
+    else if (this.cfg.client.actor) headers["x-tq-actor"] = this.cfg.client.actor;
+    let res: Response;
+    try {
+      res = await fetch(`${this.base}${path}`, { method: "POST", headers, body: form });
+    } catch {
+      throw new CliError(`daemon unreachable at ${this.base}`, EXIT.unreachable);
+    }
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : undefined;
+    if (!res.ok) {
+      const msg = (data && (data.detail || data.error)) || res.statusText;
+      throw new CliError(msg, mapStatus(res.status));
+    }
+    return data as T;
+  }
 }
 
 function mapStatus(status: number): number {

@@ -4,6 +4,14 @@ import { EventBus } from "./events.js";
 import { TaskRepo } from "./domain/task.js";
 import { IntakeRepo } from "./domain/intake.js";
 import { JobRepo } from "./domain/job.js";
+import { AttachmentRepo } from "./domain/attachment.js";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+export interface StoreOptions extends OpenDbOptions {
+  /** Directory for the content-addressed attachment blob store. */
+  attachmentsDir?: string;
+}
 
 /**
  * The Store wires the database and repositories together with a shared event
@@ -15,17 +23,22 @@ export class Store {
   readonly tasks: TaskRepo;
   readonly intake: IntakeRepo;
   readonly jobs: JobRepo;
+  readonly attachments: AttachmentRepo;
 
-  constructor(db: DB, bus = new EventBus()) {
+  constructor(db: DB, opts: { bus?: EventBus; attachmentsDir?: string } = {}) {
     this.db = db;
-    this.bus = bus;
-    this.tasks = new TaskRepo(db, bus);
-    this.intake = new IntakeRepo(db, bus, this.tasks);
-    this.jobs = new JobRepo(db, bus);
+    this.bus = opts.bus ?? new EventBus();
+    this.tasks = new TaskRepo(db, this.bus);
+    this.intake = new IntakeRepo(db, this.bus, this.tasks);
+    this.jobs = new JobRepo(db, this.bus);
+    this.attachments = new AttachmentRepo(
+      db,
+      opts.attachmentsDir ?? join(tmpdir(), "tq-attachments"),
+    );
   }
 
-  static open(opts: OpenDbOptions, bus?: EventBus): Store {
-    return new Store(openDb(opts), bus);
+  static open(opts: StoreOptions, bus?: EventBus): Store {
+    return new Store(openDb(opts), { bus, attachmentsDir: opts.attachmentsDir });
   }
 
   close(): void {
