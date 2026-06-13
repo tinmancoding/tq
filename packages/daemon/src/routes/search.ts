@@ -1,9 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { Type } from "@sinclair/typebox";
-import type { Store } from "@tq/core";
+import type { Store, Embedder } from "@tq/core";
 import { search, TASK_STATUSES } from "@tq/core";
 
-export function registerSearchRoutes(app: FastifyInstance, store: Store): void {
+export function registerSearchRoutes(
+  app: FastifyInstance,
+  store: Store,
+  embedder?: Embedder,
+): void {
   app.get(
     "/api/search",
     {
@@ -16,15 +20,20 @@ export function registerSearchRoutes(app: FastifyInstance, store: Store): void {
         }),
       },
     },
-    (req) => {
+    async (req) => {
       const q = req.query as Record<string, string | undefined>;
       const label = parseLabel(q.label);
-      const result = search(store.db, store.tasks, q.q ?? "", {
-        status: q.status as never,
-        label: label ?? undefined,
-        limit: q.limit ? Number(q.limit) : undefined,
-      });
-      return result;
+      return search(
+        store.db,
+        store.tasks,
+        q.q ?? "",
+        {
+          status: q.status as never,
+          label: label ?? undefined,
+          limit: q.limit ? Number(q.limit) : undefined,
+        },
+        embedder,
+      );
     },
   );
 }

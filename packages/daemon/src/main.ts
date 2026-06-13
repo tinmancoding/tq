@@ -1,16 +1,30 @@
-import { Store, loadConfig, TriageWorkerPool } from "@tq/core";
+import { Store, loadConfig, TriageWorkerPool, EmbeddingWorker, isVecAvailable } from "@tq/core";
 import { buildServer } from "./server.js";
 import { PiTriageEngine } from "./triage/pi-engine.js";
+import { TitanEmbedder } from "./embeddings/titan.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const store = Store.open({ path: config.daemon.db_path });
+  const store = Store.open({ path: config.daemon.db_path, embeddingDims: config.embeddings.dims });
 
   // Crash recovery: requeue any jobs left mid-flight by a previous run.
   const recovered = store.jobs.recoverRunning();
   if (recovered > 0) {
     // eslint-disable-next-line no-console
     console.error(`[tq] recovered ${recovered} stuck triage job(s)`);
+  }
+
+  // Embeddings + vector backfill (only meaningful when sqlite-vec loaded).
+  const embedder = new TitanEmbedder(config);
+  let embeddingWorker: EmbeddingWorker | null = null;
+  if (isVecAvailable(store.db)) {
+    embeddingWorker = new EmbeddingWorker(store, embedder);
+    embeddingWorker.start();
+    // eslint-disable-next-line no-console
+    console.error(`[tq] vector search enabled (Titan ${config.embeddings.model}, ${config.embeddings.dims}d)`);
+  } else {
+    // eslint-disable-next-line no-console
+    console.error(`[tq] sqlite-vec unavailable → FTS-only search`);
   }
 
   // Triage worker pool — started only when the Bedrock model is reachable.
@@ -21,6 +35,7 @@ async function main(): Promise<void> {
       concurrency: config.triage.concurrency,
       maxAttempts: config.triage.max_attempts,
       autoCreateConfidence: config.triage.auto_create_confidence,
+      embedder,
     });
     pool.start();
     // eslint-disable-next-line no-console
@@ -32,12 +47,13 @@ async function main(): Promise<void> {
     );
   }
 
-  const app = buildServer({ store, config, logger: true });
+  const app = buildServer({ store, config, logger: true, embedder });
 
   const shutdown = async (signal: string): Promise<void> => {
     // eslint-disable-next-line no-console
     console.error(`[tq] received ${signal}, shutting down`);
     pool?.stop();
+    embeddingWorker?.stop();
     await app.close();
     store.close();
     process.exit(0);

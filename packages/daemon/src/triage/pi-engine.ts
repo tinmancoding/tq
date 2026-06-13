@@ -55,7 +55,7 @@ export class PiTriageEngine implements TriageEngine {
         limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 25 })),
       }),
       execute: async (_id, params) => {
-        const hits = searchTasks(params.query, params.limit ?? 10);
+        const hits = await searchTasks(params.query, params.limit ?? 10);
         return {
           content: [{ type: "text", text: JSON.stringify(hits, null, 2) }],
           details: { count: hits.length },

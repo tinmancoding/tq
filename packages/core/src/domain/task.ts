@@ -13,6 +13,7 @@ import {
   TASK_STATUSES,
 } from "./types.js";
 import { indexTask, removeFromIndex } from "../search/fts.js";
+import { removeTaskVector } from "../search/vector.js";
 
 export interface CreateTaskInput {
   title: string;
@@ -213,6 +214,7 @@ export class TaskRepo {
     if (hard) {
       const tx = this.db.transaction(() => {
         removeFromIndex(this.db, id);
+        removeTaskVector(this.db, id);
         this.db.prepare(`DELETE FROM task WHERE id = ?`).run(id);
       });
       tx();

@@ -2,6 +2,8 @@ import type Database from "better-sqlite3";
 import type { TaskRepo } from "../domain/task.js";
 import type { Label, Task } from "../domain/types.js";
 import { ftsSearch } from "./fts.js";
+import { isVecAvailable, vecSearch } from "./vector.js";
+import type { Embedder } from "./embeddings.js";
 
 export interface SearchHit {
   task: Task;
@@ -11,7 +13,7 @@ export interface SearchHit {
 
 export interface SearchResult {
   hits: SearchHit[];
-  vector: boolean; // whether vector signal was available
+  vector: boolean; // whether the vector signal contributed
 }
 
 export interface SearchOpts {
@@ -20,32 +22,68 @@ export interface SearchOpts {
   limit?: number;
 }
 
+const RRF_K = 60;
+const CANDIDATE_K = 25;
+
 /**
- * Hybrid search. Phase 1 is FTS-only; vector/RRF fusion lands in Phase 2 and
- * will merge a sqlite-vec KNN list here. The `vector` flag tells clients which
- * signals were available so the UI can hint at degradation.
+ * Hybrid search: FTS5 (BM25) ∪ sqlite-vec KNN, fused with Reciprocal Rank
+ * Fusion. Falls back to FTS-only when vectors are unavailable or embedding the
+ * query fails (AWS down); the `vector` flag reports which signals were used.
  */
-export function search(
+export async function search(
   db: Database.Database,
   tasks: TaskRepo,
   query: string,
   opts: SearchOpts = {},
-): SearchResult {
+  embedder?: Embedder,
+): Promise<SearchResult> {
   const limit = opts.limit ?? 25;
-  const ftsHits = ftsSearch(db, query, Math.max(limit * 2, 25));
+
+  const ftsHits = ftsSearch(db, query, CANDIDATE_K);
+  const ftsRank = new Map<string, number>();
+  ftsHits.forEach((h, i) => ftsRank.set(h.task_id, i));
+
+  // Vector signal (best-effort).
+  let vectorUsed = false;
+  const vecRank = new Map<string, number>();
+  if (embedder && isVecAvailable(db) && query.trim().length > 0) {
+    try {
+      const qv = await embedder.embed(query);
+      const vecHits = vecSearch(db, qv, CANDIDATE_K);
+      vecHits.forEach((h, i) => vecRank.set(h.task_id, i));
+      vectorUsed = true;
+    } catch {
+      vectorUsed = false;
+    }
+  }
+
+  // Reciprocal Rank Fusion over the union of candidate ids.
+  const ids = new Set<string>([...ftsRank.keys(), ...vecRank.keys()]);
+  const scored: { id: string; score: number; fts: boolean; vector: boolean }[] = [];
+  for (const id of ids) {
+    const fr = ftsRank.get(id);
+    const vr = vecRank.get(id);
+    let score = 0;
+    if (fr !== undefined) score += 1 / (RRF_K + fr + 1);
+    if (vr !== undefined) score += 1 / (RRF_K + vr + 1);
+    scored.push({ id, score, fts: fr !== undefined, vector: vr !== undefined });
+  }
+  scored.sort((a, b) => b.score - a.score);
 
   const hits: SearchHit[] = [];
-  for (const h of ftsHits) {
-    const task = tasks.get(h.task_id);
+  for (const s of scored) {
+    const task = tasks.get(s.id);
     if (!task) continue;
     if (opts.status && task.status !== opts.status) continue;
-    if (opts.label && !task.labels.some((l) => l.key === opts.label!.key && l.value === opts.label!.value)) {
+    if (
+      opts.label &&
+      !task.labels.some((l) => l.key === opts.label!.key && l.value === opts.label!.value)
+    ) {
       continue;
     }
-    // bm25 rank: lower is better → convert to a descending score.
-    hits.push({ task, score: 1 / (1 + h.rank), signals: { fts: true, vector: false } });
+    hits.push({ task, score: s.score, signals: { fts: s.fts, vector: s.vector } });
     if (hits.length >= limit) break;
   }
 
-  return { hits, vector: false };
+  return { hits, vector: vectorUsed };
 }

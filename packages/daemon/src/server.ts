@@ -1,6 +1,6 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import type { Store, TqConfig } from "@tq/core";
+import type { Store, TqConfig, Embedder } from "@tq/core";
 import { registerTaskRoutes } from "./routes/tasks.js";
 import { registerIntakeRoutes } from "./routes/intake.js";
 import { registerSearchRoutes } from "./routes/search.js";
@@ -13,6 +13,7 @@ export interface BuildOptions {
   config: TqConfig;
   startedAt?: number;
   logger?: boolean;
+  embedder?: Embedder;
 }
 
 /** Construct the Fastify app with all routes registered (no listen). */
@@ -34,7 +35,7 @@ export function buildServer(opts: BuildOptions): FastifyInstance {
   registerSystemRoutes(app, opts.store, opts.config, startedAt);
   registerTaskRoutes(app, opts.store);
   registerIntakeRoutes(app, opts.store);
-  registerSearchRoutes(app, opts.store);
+  registerSearchRoutes(app, opts.store, opts.embedder);
   registerJobRoutes(app, opts.store);
   registerSse(app, opts.store, startedAt);
 

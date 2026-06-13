@@ -20,7 +20,7 @@ export interface TriageSearchHit {
   score: number;
 }
 
-export type TriageSearchFn = (query: string, limit: number) => TriageSearchHit[];
+export type TriageSearchFn = (query: string, limit: number) => Promise<TriageSearchHit[]>;
 
 /**
  * Abstraction over "run an LLM triage pass". The real implementation (in the

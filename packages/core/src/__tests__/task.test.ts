@@ -12,7 +12,7 @@ describe("TaskRepo", () => {
     store = freshStore();
   });
 
-  it("creates a task with labels and indexes it for search", () => {
+  it("creates a task with labels and indexes it for search", async () => {
     const t = store.tasks.create({
       title: "Fix auth cookie bug",
       body: "session expires early",
@@ -21,7 +21,7 @@ describe("TaskRepo", () => {
     expect(t.status).toBe("backlog");
     expect(t.labels).toEqual([{ key: "project", value: "aibm" }]);
 
-    const res = search(store.db, store.tasks, "auth cookie");
+    const res = await search(store.db, store.tasks, "auth cookie");
     expect(res.hits.length).toBe(1);
     expect(res.hits[0]!.task.id).toBe(t.id);
     expect(res.vector).toBe(false);
@@ -52,11 +52,11 @@ describe("TaskRepo", () => {
     expect(store.tasks.get(b.id)).toBeNull();
   });
 
-  it("reindexes when labels change", () => {
+  it("reindexes when labels change", async () => {
     const t = store.tasks.create({ title: "searchable" });
-    expect(search(store.db, store.tasks, "frontend").hits).toHaveLength(0);
+    expect((await search(store.db, store.tasks, "frontend")).hits).toHaveLength(0);
     store.tasks.addLabel(t.id, { key: "area", value: "frontend" });
-    expect(search(store.db, store.tasks, "frontend").hits).toHaveLength(1);
+    expect((await search(store.db, store.tasks, "frontend")).hits).toHaveLength(1);
   });
 });
 

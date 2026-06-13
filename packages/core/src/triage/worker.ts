@@ -1,6 +1,7 @@
 import type { Store } from "../store.js";
 import { now } from "../domain/ids.js";
 import { search } from "../search/hybrid.js";
+import type { Embedder } from "../search/embeddings.js";
 import { decideGate, type GateAction } from "./gate.js";
 import type { TriageEngine, TriageImage, TriageSearchHit } from "./engine.js";
 import type { TriageResult } from "../domain/types.js";
@@ -17,6 +18,8 @@ export interface WorkerPoolOptions {
   pollIntervalMs?: number;
   /** Loads image attachments for an intake (Phase 2D wires the real loader). */
   loadImages?: (intakeId: string) => TriageImage[];
+  /** Embedder for hybrid search inside the search_tasks tool (optional). */
+  embedder?: Embedder;
 }
 
 interface ClaimedJob {
@@ -121,8 +124,8 @@ export class TriageWorkerPool {
     }
   }
 
-  private searchTasks(query: string, limit: number): TriageSearchHit[] {
-    const res = search(this.store.db, this.store.tasks, query, { limit });
+  private async searchTasks(query: string, limit: number): Promise<TriageSearchHit[]> {
+    const res = await search(this.store.db, this.store.tasks, query, { limit }, this.opts.embedder);
     return res.hits.map((h) => ({
       id: h.task.id,
       title: h.task.title,

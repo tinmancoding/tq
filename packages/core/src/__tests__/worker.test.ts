@@ -32,7 +32,7 @@ class MockEngine implements TriageEngine {
   constructor(private readonly result: TriageResult | (() => TriageResult)) {}
   async triage(input: TriageInput, searchTasks: TriageSearchFn): Promise<TriageResult> {
     this.lastInput = input;
-    searchTasks("probe", 5); // exercise the tool wiring
+    await searchTasks("probe", 5); // exercise the tool wiring
     this.searchCalls.push(input.intake.id);
     return typeof this.result === "function" ? this.result() : this.result;
   }
