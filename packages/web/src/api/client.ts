@@ -3,7 +3,9 @@ import type {
   Intake,
   IntakeDetail,
   Label,
+  Priority,
   Task,
+  TaskRef,
   TaskStatus,
 } from "./types";
 
@@ -113,10 +115,37 @@ export const taskApi = {
     ).then((r) => r.board),
 
   get: (id: string) =>
-    request<Task & { activity: import("./types").Activity[] }>(
-      "GET",
-      `/tasks/${id}`,
+    request<import("./types").TaskDetail>("GET", `/tasks/${id}`),
+
+  update: (
+    id: string,
+    patch: {
+      title?: string;
+      body?: string | null;
+      priority?: Priority | null;
+      due_at?: string | null;
+      snooze_until?: string | null;
+    },
+  ) => request<Task>("PATCH", `/tasks/${id}`, patch),
+
+  addLabel: (id: string, label: Label) =>
+    request<Task>("POST", `/tasks/${id}/labels`, label),
+
+  removeLabel: (id: string, label: Label) =>
+    request<Task>(
+      "DELETE",
+      `/tasks/${id}/labels/${encodeURIComponent(label.key)}/${encodeURIComponent(label.value)}`,
     ),
+
+  addRef: (
+    id: string,
+    ref: { kind: string; url: string; external_id?: string; title?: string },
+  ) => request<TaskRef>("POST", `/tasks/${id}/refs`, ref),
+
+  addActivity: (
+    id: string,
+    entry: { entry_type: "worklog" | "comment"; body: string },
+  ) => request<import("./types").Activity>("POST", `/tasks/${id}/activity`, entry),
 
   move: (id: string, status: TaskStatus, board_rank?: string) =>
     request<Task>("POST", `/tasks/${id}/move`, { status, board_rank }),

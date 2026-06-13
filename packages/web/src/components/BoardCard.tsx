@@ -1,5 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { navigate } from "../api/router";
 import { TASK_STATUSES, type Task, type TaskStatus } from "../api/types";
 
 export function BoardCard({
@@ -29,7 +30,12 @@ export function BoardCard({
       data-task={task.id}
     >
       <div className="bcard-grip" {...attributes} {...listeners}>
-        <div className="bcard-title">{task.title}</div>
+        <div
+          className="bcard-title"
+          onClick={() => !overlay && navigate(`/task/${task.id}`)}
+        >
+          {task.title}
+        </div>
         {task.priority && (
           <span className={`prio prio-${task.priority}`}>{task.priority}</span>
         )}
@@ -61,7 +67,16 @@ export function BoardCard({
 
       {onSelectMove && !overlay && (
         <div className="bcard-foot">
-          <span className="bcard-id">{task.id.slice(0, 8)}</span>
+          <button
+            className="bcard-id link"
+            data-testid="open-detail"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/task/${task.id}`);
+            }}
+          >
+            {task.id.slice(0, 8)}
+          </button>
           <select
             className="move-select"
             data-testid="move-select"

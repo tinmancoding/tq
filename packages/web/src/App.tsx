@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { systemApi } from "./api/client";
 import { qk, useEventStream, type StreamStatus } from "./api/events";
+import { navigate, useHashRoute } from "./api/router";
 import { TriageInbox } from "./views/TriageInbox";
 import { Board } from "./views/Board";
-
-type View = "inbox" | "board";
+import { TaskDetail } from "./views/TaskDetail";
 
 export function App() {
-  const [view, setView] = useState<View>("inbox");
+  const route = useHashRoute();
   const [stream, setStream] = useState<StreamStatus>({
     connected: false,
     lastEventAt: null,
@@ -22,6 +22,8 @@ export function App() {
     refetchInterval: 30_000,
   });
 
+  const onBoard = route.name === "board" || route.name === "task";
+
   return (
     <div className="app">
       <header className="topbar">
@@ -30,15 +32,15 @@ export function App() {
         </div>
         <nav className="nav">
           <button
-            className={view === "inbox" ? "nav-link active" : "nav-link"}
-            onClick={() => setView("inbox")}
+            className={route.name === "inbox" ? "nav-link active" : "nav-link"}
+            onClick={() => navigate("/")}
             data-testid="nav-inbox"
           >
             Triage inbox
           </button>
           <button
-            className={view === "board" ? "nav-link active" : "nav-link"}
-            onClick={() => setView("board")}
+            className={onBoard ? "nav-link active" : "nav-link"}
+            onClick={() => navigate("/board")}
             data-testid="nav-board"
           >
             Board
@@ -68,12 +70,10 @@ export function App() {
         </div>
       </header>
 
-      <main className={view === "board" ? "main main-wide" : "main"}>
-        {view === "inbox" ? (
-          <TriageInbox />
-        ) : (
-          <Board />
-        )}
+      <main className={route.name === "board" ? "main main-wide" : "main"}>
+        {route.name === "inbox" && <TriageInbox />}
+        {route.name === "board" && <Board />}
+        {route.name === "task" && <TaskDetail id={route.id} />}
       </main>
     </div>
   );

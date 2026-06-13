@@ -80,6 +80,7 @@ export function registerTaskRoutes(app: FastifyInstance, store: Store): void {
     return {
       ...task,
       activity: store.tasks.listActivity(id),
+      linked_intakes: store.intake.forTask(id),
     };
   });
 

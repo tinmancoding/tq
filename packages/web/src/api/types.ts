@@ -23,6 +23,8 @@ export const TASK_STATUSES: TaskStatus[] = [
   "dropped",
 ];
 
+export const PRIORITIES: Priority[] = ["high", "med", "low"];
+
 export interface Label {
   key: string;
   value: string;
@@ -113,6 +115,17 @@ export interface AttachmentMeta {
 export interface IntakeDetail extends Intake {
   linked_task_ids: string[];
   attachments: AttachmentMeta[];
+}
+
+export interface LinkedIntake {
+  id: string;
+  relation: string;
+  summary: string | null;
+}
+
+export interface TaskDetail extends Task {
+  activity: Activity[];
+  linked_intakes: LinkedIntake[];
 }
 
 export interface JobCounts {

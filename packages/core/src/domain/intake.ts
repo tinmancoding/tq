@@ -267,6 +267,29 @@ export class IntakeRepo {
     ).map((r) => r.task_id);
   }
 
+  /** Reverse of linkedTaskIds: intakes linked to a given task (for task detail). */
+  forTask(taskId: string): { id: string; relation: string; summary: string | null }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT it.intake_id AS id, it.relation AS relation, i.triage AS triage
+           FROM intake_task it JOIN intake i ON i.id = it.intake_id
+          WHERE it.task_id = ?
+          ORDER BY it.created_at ASC`,
+      )
+      .all(taskId) as { id: string; relation: string; triage: string | null }[];
+    return rows.map((r) => {
+      let summary: string | null = null;
+      if (r.triage) {
+        try {
+          summary = (JSON.parse(r.triage) as { summary?: string }).summary ?? null;
+        } catch {
+          summary = null;
+        }
+      }
+      return { id: r.id, relation: r.relation, summary };
+    });
+  }
+
   // ── helpers ──
   private enqueueJob(intakeId: string, ts: string): void {
     this.db
