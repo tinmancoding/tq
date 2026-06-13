@@ -208,7 +208,7 @@ export class IntakeRepo {
   }
 
   /** Link an intake to an existing task (no new task created). */
-  link(id: string, taskId: string, relation = "linked"): Intake | null {
+  link(id: string, taskId: string, relation = "linked", actor = DEFAULT_ACTOR): Intake | null {
     const intake = this.get(id);
     if (!intake) return null;
     if (!this.tasks.get(taskId)) return null;
@@ -216,7 +216,7 @@ export class IntakeRepo {
       this.linkInternal(id, taskId, relation);
       this.tasks.addActivity(taskId, {
         entry_type: "system",
-        actor: DEFAULT_ACTOR,
+        actor,
         body: `linked intake ${id.slice(0, 8)}`,
         meta: { intake_id: id, relation },
       });

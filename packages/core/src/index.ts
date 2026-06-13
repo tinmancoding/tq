@@ -30,3 +30,16 @@ export {
   expandHome,
   type TqConfig,
 } from "./config.js";
+
+// ── triage ──
+export { decideGate, type GateAction } from "./triage/gate.js";
+export { buildTriagePrompt } from "./triage/prompt.js";
+export { TriageResultSchema, type TriageResultStatic } from "./triage/schema.js";
+export {
+  type TriageEngine,
+  type TriageInput,
+  type TriageImage,
+  type TriageSearchHit,
+  type TriageSearchFn,
+} from "./triage/engine.js";
+export { TriageWorkerPool, type WorkerPoolOptions } from "./triage/worker.js";

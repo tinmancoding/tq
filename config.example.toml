@@ -8,7 +8,7 @@ attachments_dir = "~/.local/share/tq/attachments"
 
 [triage]
 provider = "amazon-bedrock"
-model = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+model = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 concurrency = 3
 max_attempts = 3
 auto_create_confidence = 0.8

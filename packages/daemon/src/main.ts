@@ -1,5 +1,6 @@
-import { Store, loadConfig } from "@tq/core";
+import { Store, loadConfig, TriageWorkerPool } from "@tq/core";
 import { buildServer } from "./server.js";
+import { PiTriageEngine } from "./triage/pi-engine.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -12,11 +13,31 @@ async function main(): Promise<void> {
     console.error(`[tq] recovered ${recovered} stuck triage job(s)`);
   }
 
+  // Triage worker pool — started only when the Bedrock model is reachable.
+  const engine = new PiTriageEngine(config);
+  let pool: TriageWorkerPool | null = null;
+  if (engine.probe()) {
+    pool = new TriageWorkerPool(store, engine, {
+      concurrency: config.triage.concurrency,
+      maxAttempts: config.triage.max_attempts,
+      autoCreateConfidence: config.triage.auto_create_confidence,
+    });
+    pool.start();
+    // eslint-disable-next-line no-console
+    console.error(`[tq] triage pool started (concurrency ${config.triage.concurrency}, model ${config.triage.model})`);
+  } else {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[tq] triage disabled: model ${config.triage.provider}/${config.triage.model} not available (check AWS creds). Intake will queue.`,
+    );
+  }
+
   const app = buildServer({ store, config, logger: true });
 
   const shutdown = async (signal: string): Promise<void> => {
     // eslint-disable-next-line no-console
     console.error(`[tq] received ${signal}, shutting down`);
+    pool?.stop();
     await app.close();
     store.close();
     process.exit(0);

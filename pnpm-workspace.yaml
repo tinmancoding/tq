@@ -4,6 +4,11 @@ packages:
 verifyDepsBeforeRun: false
 onlyBuiltDependencies:
   - better-sqlite3
-  - esbuild
+minimumReleaseAgeExclude:
+  - '@earendil-works/pi-agent-core@0.79.3'
+  - '@earendil-works/pi-ai@0.79.3'
+  - '@earendil-works/pi-coding-agent@0.79.3'
+  - '@earendil-works/pi-tui@0.79.3'
 allowBuilds:
-  esbuild: set this to true or false
+  '@google/genai': set this to true or false
+  protobufjs: set this to true or false
