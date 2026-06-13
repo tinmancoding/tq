@@ -9,10 +9,12 @@
   },
   "scripts": {
     "build": "pnpm typecheck",
-    "typecheck": "tsc -p packages/core && tsc -p packages/daemon && tsc -p packages/cli",
+    "typecheck": "tsc -p packages/core && tsc -p packages/daemon && tsc -p packages/cli && pnpm --filter @tq/web typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsx packages/daemon/src/main.ts",
+    "dev:web": "pnpm --filter @tq/web dev",
+    "dev:all": "node scripts/dev-all.mjs",
     "cli": "tsx packages/cli/src/index.ts"
   },
   "devDependencies": {

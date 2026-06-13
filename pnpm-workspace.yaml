@@ -11,4 +11,5 @@ minimumReleaseAgeExclude:
   - '@earendil-works/pi-tui@0.79.3'
 allowBuilds:
   '@google/genai': set this to true or false
+  esbuild: set this to true or false
   protobufjs: set this to true or false
