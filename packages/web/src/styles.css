@@ -718,3 +718,109 @@ body {
   margin-top: 2px;
   white-space: pre-wrap;
 }
+
+/* ── header buttons ── */
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* ── modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8vh;
+  z-index: 100;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: 84vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.modal-x {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+.modal-x:hover {
+  color: var(--text);
+}
+.modal-body {
+  padding: 16px 18px;
+}
+.modal-body .form {
+  border-top: none;
+  padding-top: 0;
+}
+.row {
+  display: flex;
+  gap: 12px;
+}
+.field.grow {
+  flex: 1;
+}
+
+/* ── dropzone ── */
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  transition: border-color 0.15s;
+}
+.dropzone-over {
+  border-color: var(--accent);
+  background: rgba(68, 147, 248, 0.06);
+}
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.thumb {
+  position: relative;
+}
+.thumb img {
+  max-height: 90px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.thumb-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bad);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}

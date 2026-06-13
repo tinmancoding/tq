@@ -68,6 +68,27 @@ export const intakeApi = {
   create: (input: { text?: string; labels?: Record<string, string> }) =>
     request<Intake>("POST", "/intake", input),
 
+  createMultipart: (input: {
+    text?: string;
+    labels?: Record<string, string>;
+    verbs?: string[];
+    images?: File[];
+  }) => {
+    const fd = new FormData();
+    if (input.text) fd.set("text", input.text);
+    if (input.labels) fd.set("labels", JSON.stringify(input.labels));
+    if (input.verbs) fd.set("verbs", JSON.stringify(input.verbs));
+    for (const img of input.images ?? []) fd.append("image", img, img.name);
+    return fetch("/api/intake", {
+      method: "POST",
+      headers: { "X-TQ-Actor": ACTOR },
+      body: fd,
+    }).then(async (res) => {
+      if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+      return (await res.json()) as Intake;
+    });
+  },
+
   promote: (
     id: string,
     payload: {
@@ -97,6 +118,13 @@ export const intakeApi = {
 
 // ─────────────────────────────── Tasks ────────────────────────────────
 export const taskApi = {
+  create: (input: {
+    title: string;
+    body?: string;
+    priority?: Priority;
+    labels?: Label[];
+  }) => request<Task>("POST", "/tasks", input),
+
   list: (params: { status?: string; label?: string } = {}) => {
     const q = new URLSearchParams();
     if (params.status) q.set("status", params.status);

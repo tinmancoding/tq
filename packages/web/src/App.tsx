@@ -6,9 +6,11 @@ import { navigate, useHashRoute } from "./api/router";
 import { TriageInbox } from "./views/TriageInbox";
 import { Board } from "./views/Board";
 import { TaskDetail } from "./views/TaskDetail";
+import { NewIntakeModal, NewTaskModal } from "./components/CreateModals";
 
 export function App() {
   const route = useHashRoute();
+  const [modal, setModal] = useState<"intake" | "task" | null>(null);
   const [stream, setStream] = useState<StreamStatus>({
     connected: false,
     lastEventAt: null,
@@ -47,6 +49,12 @@ export function App() {
           </button>
         </nav>
         <div className="ops">
+          <button className="btn btn-primary btn-sm" data-testid="open-capture" onClick={() => setModal("intake")}>
+            + Capture
+          </button>
+          <button className="btn btn-sm" data-testid="open-new-task" onClick={() => setModal("task")}>
+            + Task
+          </button>
           <span
             className={stream.connected ? "dot dot-ok" : "dot dot-bad"}
             title={stream.connected ? "SSE connected" : "SSE disconnected"}
@@ -75,6 +83,9 @@ export function App() {
         {route.name === "board" && <Board />}
         {route.name === "task" && <TaskDetail id={route.id} />}
       </main>
+
+      {modal === "intake" && <NewIntakeModal onClose={() => setModal(null)} />}
+      {modal === "task" && <NewTaskModal onClose={() => setModal(null)} />}
     </div>
   );
 }
