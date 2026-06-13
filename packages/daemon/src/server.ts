@@ -9,6 +9,7 @@ import { registerJobRoutes } from "./routes/jobs.js";
 import { registerSystemRoutes } from "./routes/system.js";
 import { registerAttachmentRoutes } from "./routes/attachments.js";
 import { registerSse } from "./sse.js";
+import { registerStatic } from "./static.js";
 
 export interface BuildOptions {
   store: Store;
@@ -16,6 +17,7 @@ export interface BuildOptions {
   startedAt?: number;
   logger?: boolean;
   embedder?: Embedder;
+  webDist?: string;
 }
 
 /** Construct the Fastify app with all routes registered (no listen). */
@@ -46,6 +48,8 @@ export function buildServer(opts: BuildOptions): FastifyInstance {
   registerJobRoutes(app, opts.store);
   registerAttachmentRoutes(app, opts.store);
   registerSse(app, opts.store, startedAt);
+
+  if (opts.webDist) registerStatic(app, opts.webDist);
 
   return app;
 }

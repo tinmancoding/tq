@@ -15,6 +15,7 @@
     "dev": "tsx packages/daemon/src/main.ts",
     "dev:web": "pnpm --filter @tq/web dev",
     "dev:all": "node scripts/dev-all.mjs",
+    "build:web": "pnpm --filter @tq/web build",
     "cli": "tsx packages/cli/src/index.ts"
   },
   "devDependencies": {

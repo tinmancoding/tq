@@ -1,4 +1,5 @@
 import { Store, loadConfig, TriageWorkerPool, EmbeddingWorker, isVecAvailable } from "@tq/core";
+import { existsSync } from "node:fs";
 import { buildServer } from "./server.js";
 import { PiTriageEngine } from "./triage/pi-engine.js";
 import { TitanEmbedder } from "./embeddings/titan.js";
@@ -57,7 +58,14 @@ async function main(): Promise<void> {
     );
   }
 
-  const app = buildServer({ store, config, logger: true, embedder });
+  const webDist = new URL("../../web/dist", import.meta.url).pathname;
+  const app = buildServer({ store, config, logger: true, embedder, webDist });
+  // eslint-disable-next-line no-console
+  console.error(
+    existsSync(webDist)
+      ? `[tq] serving web dashboard at http://${config.daemon.host}:${config.daemon.port}/`
+      : `[tq] web dashboard not built (run: pnpm --filter @tq/web build) — API only`,
+  );
 
   const shutdown = async (signal: string): Promise<void> => {
     // eslint-disable-next-line no-console
