@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { systemApi } from "./api/client";
 import { qk, useEventStream, type StreamStatus } from "./api/events";
 import { TriageInbox } from "./views/TriageInbox";
+import { Board } from "./views/Board";
 
 type View = "inbox" | "board";
 
@@ -67,11 +68,11 @@ export function App() {
         </div>
       </header>
 
-      <main className="main">
+      <main className={view === "board" ? "main main-wide" : "main"}>
         {view === "inbox" ? (
           <TriageInbox />
         ) : (
-          <div className="placeholder">Board view — coming next.</div>
+          <Board />
         )}
       </main>
     </div>

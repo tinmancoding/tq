@@ -6,6 +6,7 @@ export const qk = {
   intakeList: (status?: string) => ["intake", "list", status ?? "all"] as const,
   intake: (id: string) => ["intake", "detail", id] as const,
   taskList: (status?: string) => ["task", "list", status ?? "all"] as const,
+  board: () => ["task", "board"] as const,
   task: (id: string) => ["task", "detail", id] as const,
   health: () => ["system", "health"] as const,
   jobs: () => ["jobs"] as const,
@@ -62,7 +63,7 @@ export function useEventStream(onStatus?: (s: StreamStatus) => void): void {
 
     for (const name of INTAKE_EVENTS) {
       es.addEventListener(name, (e) => {
-        invalidate([["intake", "list"], ["task", "list"], qk.health()]);
+        invalidate([["intake", "list"], ["task", "list"], qk.board(), qk.health()]);
         const id = parseId(e);
         if (id) void qc.invalidateQueries({ queryKey: qk.intake(id) });
         bumpStatus(true);
@@ -71,7 +72,7 @@ export function useEventStream(onStatus?: (s: StreamStatus) => void): void {
 
     for (const name of TASK_EVENTS) {
       es.addEventListener(name, (e) => {
-        invalidate([["task", "list"], qk.health()]);
+        invalidate([["task", "list"], qk.board(), qk.health()]);
         const id = parseId(e);
         if (id) void qc.invalidateQueries({ queryKey: qk.task(id) });
         bumpStatus(true);

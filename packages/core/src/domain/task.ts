@@ -140,7 +140,8 @@ export class TaskRepo {
     const rows = this.db
       .prepare(
         `SELECT t.* FROM task t ${whereSql}
-          ORDER BY t.created_at DESC LIMIT ? OFFSET ?`,
+          ORDER BY (t.board_rank IS NULL), t.board_rank ASC, t.created_at DESC
+          LIMIT ? OFFSET ?`,
       )
       .all(...params, limit, offset) as TaskRow[];
     return rows.map((r) => this.hydrate(r));

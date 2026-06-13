@@ -106,6 +106,12 @@ export const taskApi = {
     ).then((r) => r.tasks);
   },
 
+  board: () =>
+    request<{ group: "status"; board: Record<TaskStatus, Task[]> }>(
+      "GET",
+      "/tasks?group=status",
+    ).then((r) => r.board),
+
   get: (id: string) =>
     request<Task & { activity: import("./types").Activity[] }>(
       "GET",
