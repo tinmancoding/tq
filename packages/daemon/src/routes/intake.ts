@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { Type } from "@sinclair/typebox";
-import type { Store } from "@tq/core";
+import type { Intake, Store } from "@tq/core";
 import { INTAKE_STATUSES, TASK_STATUSES } from "@tq/core";
 import { resolveActor } from "../context.js";
 
@@ -71,12 +71,14 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
     (req) => {
       const q = req.query as Record<string, string | undefined>;
       return {
-        intake: store.intake.list({
-          status: q.status as never,
-          source: q.source,
-          limit: q.limit ? Number(q.limit) : undefined,
-          offset: q.offset ? Number(q.offset) : undefined,
-        }),
+        intake: store.intake
+          .list({
+            status: q.status as never,
+            source: q.source,
+            limit: q.limit ? Number(q.limit) : undefined,
+            offset: q.offset ? Number(q.offset) : undefined,
+          })
+          .map(stripTrace),
       };
     },
   );
@@ -86,7 +88,7 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
     if (!id) return reply.code(404).send({ error: "intake not found" });
     const intake = store.intake.get(id)!;
     return {
-      ...intake,
+      ...stripTrace(intake),
       linked_task_ids: store.intake.linkedTaskIds(id),
       attachments: store.attachments.forIntake(id),
     };
@@ -143,6 +145,21 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
     if (!id) return reply.code(404).send({ error: "intake not found" });
     return store.intake.retriage(id);
   });
+
+  // Triage LLM session transcript (observability) — fetched lazily by the UI.
+  app.get("/api/intake/:id/trace", (req, reply) => {
+    const id = store.intake.resolveId((req.params as { id: string }).id);
+    if (!id) return reply.code(404).send({ error: "intake not found" });
+    const intake = store.intake.get(id)!;
+    return { trace: intake.triage_trace ?? [] };
+  });
+}
+
+/** Drop the (potentially large) triage transcript from list/detail payloads;
+ * it's served on demand by GET /api/intake/:id/trace. */
+function stripTrace(intake: Intake): Omit<Intake, "triage_trace"> {
+  const { triage_trace: _omit, ...rest } = intake;
+  return rest;
 }
 
 function parseJsonField<T>(value: string | undefined): T | undefined {

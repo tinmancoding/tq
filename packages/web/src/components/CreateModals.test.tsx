@@ -73,4 +73,42 @@ describe("NewIntakeModal", () => {
     renderWithClient(<NewIntakeModal onClose={() => {}} />);
     expect(screen.getByTestId("intake-submit")).toBeDisabled();
   });
+
+  it("attaches images via the file picker and submits them", async () => {
+    const user = userEvent.setup();
+    let hit = false;
+    let contentType = "";
+    server.use(
+      http.post("*/api/intake", ({ request }) => {
+        hit = true;
+        contentType = request.headers.get("content-type") ?? "";
+        return HttpResponse.json({ id: "i-img", status: "new" }, { status: 202 });
+      }),
+    );
+    renderWithClient(<NewIntakeModal onClose={() => {}} />);
+
+    // Empty state shows the attach button; submit is disabled with no text/images.
+    expect(screen.getByTestId("intake-submit")).toBeDisabled();
+
+    const file = new File(["fake-png-bytes"], "shot.png", { type: "image/png" });
+    await user.upload(screen.getByTestId("attach-input"), file);
+
+    // A thumbnail renders and capture becomes enabled even without any text.
+    expect(await screen.findByAltText("shot.png")).toBeInTheDocument();
+    expect(screen.getByTestId("intake-submit")).toBeEnabled();
+
+    await user.click(screen.getByTestId("intake-submit"));
+    await waitFor(() => expect(hit).toBe(true));
+    expect(contentType).toContain("multipart/form-data");
+  });
+
+  it("ignores non-image files from the picker", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<NewIntakeModal onClose={() => {}} />);
+    const txt = new File(["hello"], "notes.txt", { type: "text/plain" });
+    await user.upload(screen.getByTestId("attach-input"), txt);
+    // Still empty: no thumbnail, submit stays disabled, attach button visible.
+    expect(screen.getByTestId("attach-images")).toBeInTheDocument();
+    expect(screen.getByTestId("intake-submit")).toBeDisabled();
+  });
 });

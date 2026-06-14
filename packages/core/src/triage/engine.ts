@@ -1,9 +1,14 @@
-import type { Intake, Label, TriageResult } from "../domain/types.js";
+import type { Intake, Label, TriageResult, TriageTraceStep } from "../domain/types.js";
+
+export type { TriageTraceStep };
 
 export interface TriageImage {
   mediaType: string; // image/png, image/jpeg, …
   dataBase64: string;
 }
+
+/** Callback used by an engine to surface the session transcript to the worker. */
+export type TriageTraceSink = (trace: TriageTraceStep[]) => void;
 
 export interface TriageInput {
   intake: Intake;
@@ -28,5 +33,9 @@ export type TriageSearchFn = (query: string, limit: number) => Promise<TriageSea
  * tools; tests inject a deterministic mock.
  */
 export interface TriageEngine {
-  triage(input: TriageInput, searchTasks: TriageSearchFn): Promise<TriageResult>;
+  triage(
+    input: TriageInput,
+    searchTasks: TriageSearchFn,
+    onTrace?: TriageTraceSink,
+  ): Promise<TriageResult>;
 }

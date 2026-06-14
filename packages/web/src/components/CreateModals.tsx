@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { intakeApi, taskApi } from "../api/client";
 import { qk } from "../api/events";
@@ -106,6 +106,7 @@ export function NewIntakeModal({ onClose }: { onClose: () => void }) {
   const [labelsText, setLabelsText] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const create = useMutation({
     mutationFn: () =>
@@ -169,7 +170,17 @@ export function NewIntakeModal({ onClose }: { onClose: () => void }) {
           }}
         >
           {images.length === 0 ? (
-            <span>Drop or paste screenshots here</span>
+            <div className="dropzone-empty">
+              <span>Drop or paste screenshots here</span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                data-testid="attach-images"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Attach images
+              </button>
+            </div>
           ) : (
             <div className="thumbs">
               {images.map((img, i) => (
@@ -185,8 +196,29 @@ export function NewIntakeModal({ onClose }: { onClose: () => void }) {
                   </button>
                 </div>
               ))}
+              <button
+                type="button"
+                className="btn btn-sm thumb-add"
+                data-testid="attach-images"
+                aria-label="attach more images"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                +
+              </button>
             </div>
           )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            data-testid="attach-input"
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
         </div>
 
         <label className="field">

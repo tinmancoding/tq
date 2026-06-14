@@ -2,6 +2,7 @@ import { Store, loadConfig, TriageWorkerPool, EmbeddingWorker, isVecAvailable } 
 import { existsSync } from "node:fs";
 import { buildServer } from "./server.js";
 import { PiTriageEngine } from "./triage/pi-engine.js";
+import { prepareImageForTriage } from "./triage/resize-image.js";
 import { TitanEmbedder } from "./embeddings/titan.js";
 
 async function main(): Promise<void> {
@@ -42,11 +43,12 @@ async function main(): Promise<void> {
       autoCreateConfidence: config.triage.auto_create_confidence,
       embedder,
       loadImages: (intakeId) =>
-        store.attachments
-          .forIntake(intakeId)
-          .filter((a) => a.mime.startsWith("image/"))
-          .map((a) => ({ mediaType: a.mime, dataBase64: store.attachments.readBase64(a.sha256) ?? "" }))
-          .filter((img) => img.dataBase64.length > 0),
+        Promise.all(
+          store.attachments
+            .forIntake(intakeId)
+            .filter((a) => a.mime.startsWith("image/"))
+            .map((a) => prepareImageForTriage(store.attachments.filePath(a.sha256), a.mime)),
+        ).then((imgs) => imgs.filter((img): img is NonNullable<typeof img> => !!img && img.dataBase64.length > 0)),
     });
     pool.start();
     // eslint-disable-next-line no-console

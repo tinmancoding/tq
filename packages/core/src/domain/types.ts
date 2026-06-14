@@ -64,6 +64,17 @@ export interface Activity {
   created_at: string;
 }
 
+/**
+ * One step in the recorded triage session transcript — lets the dashboard show
+ * what the LLM actually did (its reasoning text, the searches it ran, the
+ * results it saw, and any error that aborted the pass).
+ */
+export type TriageTraceStep =
+  | { kind: "thought"; text: string }
+  | { kind: "tool_call"; tool: string; args: unknown }
+  | { kind: "tool_result"; tool: string; ok: boolean; text: string }
+  | { kind: "error"; text: string };
+
 export interface Intake {
   id: string;
   status: IntakeStatus;
@@ -75,6 +86,7 @@ export interface Intake {
   discard_reason: string | null;
   triage: unknown | null;
   triage_error: string | null;
+  triage_trace: TriageTraceStep[] | null;
   labels: Record<string, string> | null;
   watchlist_id: string | null;
   created_at: string;

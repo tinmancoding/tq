@@ -1,6 +1,6 @@
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import type { IntakeDetail, Task } from "../api/types";
+import type { IntakeDetail, Task, TriageTraceStep } from "../api/types";
 
 // A mutable in-memory fixture the handlers read/write, so tests can assert
 // that mutations hit the server with the right payloads.
@@ -8,6 +8,7 @@ export const db = {
   intakeDetail: null as IntakeDetail | null,
   triaged: [] as IntakeDetail[],
   board: {} as Record<string, Task[]>,
+  trace: [] as TriageTraceStep[],
   calls: [] as { method: string; url: string; body: unknown }[],
 };
 
@@ -15,6 +16,7 @@ export function resetDb() {
   db.intakeDetail = null;
   db.triaged = [];
   db.board = {};
+  db.trace = [];
   db.calls = [];
 }
 
@@ -59,6 +61,11 @@ export const server = setupServer(
   http.post(`${base}/api/intake/:id/retriage`, ({ params }) => {
     db.calls.push({ method: "POST", url: `/intake/${params.id}/retriage`, body: null });
     return HttpResponse.json({ ok: true });
+  }),
+
+  http.get(`${base}/api/intake/:id/trace`, ({ params }) => {
+    db.calls.push({ method: "GET", url: `/intake/${params.id}/trace`, body: null });
+    return HttpResponse.json({ trace: db.trace });
   }),
 
   http.get(`${base}/api/tasks`, ({ request }) => {

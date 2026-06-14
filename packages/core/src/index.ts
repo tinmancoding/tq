@@ -55,5 +55,7 @@ export {
   type TriageImage,
   type TriageSearchHit,
   type TriageSearchFn,
+  type TriageTraceStep,
+  type TriageTraceSink,
 } from "./triage/engine.js";
 export { TriageWorkerPool, type WorkerPoolOptions } from "./triage/worker.js";

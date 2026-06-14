@@ -8,6 +8,7 @@ import {
   type Priority,
   type TaskStatus,
   type TriageResult,
+  type TriageTraceStep,
   DEFAULT_ACTOR,
 } from "./types.js";
 import type { TaskRepo } from "./task.js";
@@ -44,6 +45,7 @@ interface IntakeRow {
   discard_reason: string | null;
   triage: string | null;
   triage_error: string | null;
+  triage_trace: string | null;
   labels: string | null;
   watchlist_id: string | null;
   created_at: string;
@@ -170,6 +172,13 @@ export class IntakeRepo {
     this.db.prepare(`UPDATE intake SET triage_error = ? WHERE id = ?`).run(error, id);
   }
 
+  /** Persist the LLM session transcript for an intake (success or failure). */
+  setTriageTrace(id: string, trace: TriageTraceStep[]): void {
+    this.db
+      .prepare(`UPDATE intake SET triage_trace = ? WHERE id = ?`)
+      .run(JSON.stringify(trace), id);
+  }
+
   /** Promote an intake into a new task, carrying over triage suggestions. */
   promote(id: string, input: PromoteInput = {}): { intake: Intake; taskId: string } | null {
     const intake = this.get(id);
@@ -251,7 +260,7 @@ export class IntakeRepo {
     if (!intake) return null;
     const tx = this.db.transaction(() => {
       this.db
-        .prepare(`UPDATE intake SET status = 'new', triage_error = NULL WHERE id = ?`)
+        .prepare(`UPDATE intake SET status = 'new', triage_error = NULL, triage_trace = NULL WHERE id = ?`)
         .run(id);
       this.enqueueJob(id, now());
     });
@@ -320,6 +329,7 @@ function hydrateIntake(row: IntakeRow): Intake {
     ...row,
     action_verbs: row.action_verbs ? JSON.parse(row.action_verbs) : null,
     triage: row.triage ? JSON.parse(row.triage) : null,
+    triage_trace: row.triage_trace ? JSON.parse(row.triage_trace) : null,
     labels: row.labels ? JSON.parse(row.labels) : null,
   };
 }

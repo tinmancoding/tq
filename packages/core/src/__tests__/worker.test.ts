@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Store } from "../store.js";
 import { TriageWorkerPool } from "../triage/worker.js";
-import type { TriageEngine, TriageInput, TriageSearchFn } from "../triage/engine.js";
+import type { TriageEngine, TriageInput, TriageSearchFn, TriageTraceStep } from "../triage/engine.js";
 import type { TriageResult } from "../domain/types.js";
 
 function fresh(): Store {
@@ -29,11 +29,19 @@ function triageResult(overrides: Partial<TriageResult> = {}): TriageResult {
 class MockEngine implements TriageEngine {
   lastInput?: TriageInput;
   searchCalls: string[] = [];
-  constructor(private readonly result: TriageResult | (() => TriageResult)) {}
-  async triage(input: TriageInput, searchTasks: TriageSearchFn): Promise<TriageResult> {
+  constructor(
+    private readonly result: TriageResult | (() => TriageResult),
+    private readonly trace?: TriageTraceStep[],
+  ) {}
+  async triage(
+    input: TriageInput,
+    searchTasks: TriageSearchFn,
+    onTrace?: (t: TriageTraceStep[]) => void,
+  ): Promise<TriageResult> {
     this.lastInput = input;
     await searchTasks("probe", 5); // exercise the tool wiring
     this.searchCalls.push(input.intake.id);
+    if (this.trace) onTrace?.(this.trace);
     return typeof this.result === "function" ? this.result() : this.result;
   }
 }
@@ -125,5 +133,35 @@ describe("TriageWorkerPool", () => {
     pool.stop();
     expect(engine.lastInput?.images).toHaveLength(1);
     expect(engine.searchCalls).toContain(intake.id);
+  });
+
+  it("persists the triage session transcript on success", async () => {
+    const { intake } = store.intake.create({ body: "please fix the login flow" });
+    const trace: TriageTraceStep[] = [
+      { kind: "thought", text: "checking duplicates" },
+      { kind: "tool_call", tool: "search_tasks", args: { query: "login" } },
+      { kind: "tool_result", tool: "search_tasks", ok: true, text: "[]" },
+    ];
+    const pool = new TriageWorkerPool(store, new MockEngine(triageResult(), trace), opts);
+    await pool.drain();
+    pool.stop();
+    expect(store.intake.get(intake.id)!.triage_trace).toEqual(trace);
+  });
+
+  it("keeps the transcript even when the pass throws after tracing", async () => {
+    const { intake } = store.intake.create({ body: "boom" });
+    const trace: TriageTraceStep[] = [{ kind: "error", text: "image too large" }];
+    const engine: TriageEngine = {
+      async triage(_input, _search, onTrace) {
+        onTrace?.(trace);
+        throw new Error("did not call emit_triage");
+      },
+    };
+    const pool = new TriageWorkerPool(store, engine, { ...opts, backoffBaseSec: 0 });
+    await pool.drain();
+    pool.stop();
+    const after = store.intake.get(intake.id)!;
+    expect(after.triage_error).toContain("did not call emit_triage");
+    expect(after.triage_trace).toEqual(trace);
   });
 });

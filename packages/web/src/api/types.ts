@@ -85,6 +85,12 @@ export interface TriageResult {
   task_count_suggestion: number;
 }
 
+export type TriageTraceStep =
+  | { kind: "thought"; text: string }
+  | { kind: "tool_call"; tool: string; args: unknown }
+  | { kind: "tool_result"; tool: string; ok: boolean; text: string }
+  | { kind: "error"; text: string };
+
 export interface Intake {
   id: string;
   status: IntakeStatus;

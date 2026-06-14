@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { attachmentUrl, intakeApi } from "../api/client";
 import { qk } from "../api/events";
-import type { DiscardReason, Intake, Label } from "../api/types";
+import type { DiscardReason, Intake, Label, TriageTraceStep } from "../api/types";
 
 const DISCARD_REASONS: DiscardReason[] = [
   "noise",
@@ -85,7 +85,7 @@ export function IntakeCard({ intake }: { intake: Intake }) {
       {triage && (
         <div className="triage">
           <p className="summary">{triage.summary}</p>
-          <ConfidenceBar value={triage.actionable_confidence} />
+          <ConfidenceMeter value={triage.actionable_confidence} />
           {triage.duplicate.decision !== "none" && (
             <DupCandidate
               decision={triage.duplicate.decision}
@@ -111,6 +111,9 @@ export function IntakeCard({ intake }: { intake: Intake }) {
           )}
         </div>
       )}
+
+      {/* Triage LLM session transcript (observability) */}
+      {intake.status !== "new" && <TriageSession intakeId={intake.id} />}
 
       {/* Raw captured text */}
       {intake.body && (
@@ -215,15 +218,109 @@ export function IntakeCard({ intake }: { intake: Intake }) {
 }
 
 // ─────────────────────────────── sub-components ────────────────────────
-function ConfidenceBar({ value }: { value: number }) {
+function TriageSession({ intakeId }: { intakeId: string }) {
+  const [open, setOpen] = useState(false);
+  const trace = useQuery({
+    queryKey: ["intake", "trace", intakeId],
+    queryFn: () => intakeApi.trace(intakeId),
+    enabled: open,
+  });
+  const steps = trace.data?.trace ?? [];
+
+  return (
+    <details
+      className="tsession"
+      data-testid="triage-session"
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary>Triage session</summary>
+      {trace.isLoading && <div className="tsession-empty">Loading…</div>}
+      {trace.isFetched && steps.length === 0 && (
+        <div className="tsession-empty">No session transcript was recorded.</div>
+      )}
+      {steps.length > 0 && (
+        <ol className="tsteps">
+          {steps.map((s, i) => (
+            <TraceStep key={i} step={s} />
+          ))}
+        </ol>
+      )}
+    </details>
+  );
+}
+
+function TraceStep({ step }: { step: TriageTraceStep }) {
+  if (step.kind === "thought") {
+    return (
+      <li className="tstep tstep-thought">
+        <span className="tstep-tag">thinking</span>
+        <p className="tstep-text">{step.text}</p>
+      </li>
+    );
+  }
+  if (step.kind === "tool_call") {
+    return (
+      <li className="tstep tstep-call">
+        <span className="tstep-tag">{step.tool}</span>
+        <code className="tstep-args">{argSummary(step.args)}</code>
+      </li>
+    );
+  }
+  if (step.kind === "tool_result") {
+    return (
+      <li className={`tstep tstep-result${step.ok ? "" : " tstep-bad"}`}>
+        <span className="tstep-tag">{step.tool} →</span>
+        <pre className="tstep-out">{step.text || "(empty)"}</pre>
+      </li>
+    );
+  }
+  return (
+    <li className="tstep tstep-error">
+      <span className="tstep-tag">error</span>
+      <p className="tstep-text">{step.text}</p>
+    </li>
+  );
+}
+
+function argSummary(args: unknown): string {
+  if (args && typeof args === "object") {
+    // Surface a query string directly; otherwise compact-JSON the args.
+    const q = (args as Record<string, unknown>).query;
+    if (typeof q === "string") return q;
+    try {
+      return JSON.stringify(args);
+    } catch {
+      return String(args);
+    }
+  }
+  return String(args ?? "");
+}
+
+function ConfidenceMeter({ value }: { value: number }) {
   const pct = Math.round(value * 100);
   const cls = value >= 0.8 ? "high" : value >= 0.5 ? "med" : "low";
+  const r = 13;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
   return (
-    <div className="conf" title={`actionable confidence ${pct}%`}>
-      <div className="conf-track">
-        <div className={`conf-fill conf-${cls}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="conf-label">{pct}%</span>
+    <div
+      className={`conf conf-${cls}`}
+      data-testid="confidence"
+      title={`actionable confidence ${pct}%`}
+    >
+      <svg className="conf-ring" width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+        <circle className="conf-ring-track" cx="17" cy="17" r={r} />
+        <circle
+          className="conf-ring-fill"
+          cx="17"
+          cy="17"
+          r={r}
+          strokeDasharray={`${dash} ${circ}`}
+          transform="rotate(-90 17 17)"
+        />
+      </svg>
+      <span className="conf-cap">Confidence</span>
+      <span className="conf-pct">{pct}%</span>
     </div>
   );
 }

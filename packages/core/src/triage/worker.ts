@@ -3,7 +3,7 @@ import { now } from "../domain/ids.js";
 import { search } from "../search/hybrid.js";
 import type { Embedder } from "../search/embeddings.js";
 import { decideGate, type GateAction } from "./gate.js";
-import type { TriageEngine, TriageImage, TriageSearchHit } from "./engine.js";
+import type { TriageEngine, TriageImage, TriageSearchHit, TriageTraceStep } from "./engine.js";
 import type { TriageResult } from "../domain/types.js";
 
 const TRIAGE_ACTOR = "agent:triage";
@@ -17,7 +17,7 @@ export interface WorkerPoolOptions {
   /** Poll interval when the queue is idle (ms). */
   pollIntervalMs?: number;
   /** Loads image attachments for an intake (Phase 2D wires the real loader). */
-  loadImages?: (intakeId: string) => TriageImage[];
+  loadImages?: (intakeId: string) => TriageImage[] | Promise<TriageImage[]>;
   /** Embedder for hybrid search inside the search_tasks tool (optional). */
   embedder?: Embedder;
 }
@@ -104,22 +104,31 @@ export class TriageWorkerPool {
   }
 
   private async process(job: ClaimedJob): Promise<void> {
+    let trace: TriageTraceStep[] = [];
     try {
       const intake = this.store.intake.get(job.intake_id);
       if (!intake) {
         this.finishJob(job.id, "done");
         return;
       }
-      const images = this.opts.loadImages?.(job.intake_id) ?? [];
-      const result = await this.engine.triage({ intake, images }, (q, limit) =>
-        this.searchTasks(q, limit),
+      const images = (await this.opts.loadImages?.(job.intake_id)) ?? [];
+      const result = await this.engine.triage(
+        { intake, images },
+        (q, limit) => this.searchTasks(q, limit),
+        (t) => {
+          trace = t;
+        },
       );
 
       // Persist result (flips intake → triaged) then apply the gate.
       this.store.intake.setTriageResult(job.intake_id, result);
+      if (trace.length) this.store.intake.setTriageTrace(job.intake_id, trace);
       this.applyGate(job.intake_id, result);
       this.finishJob(job.id, "done");
     } catch (err) {
+      // Keep the transcript even when the pass fails — it's the most useful
+      // thing to look at when debugging a triage error.
+      if (trace.length) this.store.intake.setTriageTrace(job.intake_id, trace);
       this.handleError(job, err);
     }
   }

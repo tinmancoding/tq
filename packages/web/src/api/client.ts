@@ -7,6 +7,7 @@ import type {
   Task,
   TaskRef,
   TaskStatus,
+  TriageTraceStep,
 } from "./types";
 
 // Same-origin in dev (Vite proxies /api → daemon) and in prod (daemon serves
@@ -114,6 +115,9 @@ export const intakeApi = {
 
   retriage: (id: string) =>
     request<unknown>("POST", `/intake/${id}/retriage`),
+
+  trace: (id: string) =>
+    request<{ trace: TriageTraceStep[] }>("GET", `/intake/${id}/trace`),
 };
 
 // ─────────────────────────────── Tasks ────────────────────────────────

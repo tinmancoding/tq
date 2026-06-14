@@ -59,4 +59,28 @@ describe("TriageInbox", () => {
     const dup = await screen.findByTestId("dup-candidate");
     expect(within(dup).getByText(/Strong duplicate/)).toBeInTheDocument();
   });
+
+  it("lazily loads the triage session transcript when expanded", async () => {
+    const user = userEvent.setup();
+    db.triaged = [makeTriagedIntake()];
+    db.trace = [
+      { kind: "thought", text: "Looking for duplicates" },
+      { kind: "tool_call", tool: "search_tasks", args: { query: "login flow" } },
+      { kind: "tool_result", tool: "search_tasks", ok: true, text: "[]" },
+    ];
+    renderWithClient(<TriageInbox />);
+
+    const session = await screen.findByTestId("triage-session");
+    // Closed by default — no trace request yet, no content rendered.
+    expect(db.calls.find((c) => c.url.endsWith("/trace"))).toBeUndefined();
+    expect(screen.queryByText("Looking for duplicates")).not.toBeInTheDocument();
+
+    await user.click(within(session).getByText("Triage session"));
+
+    expect(await screen.findByText("Looking for duplicates")).toBeInTheDocument();
+    expect(screen.getByText("login flow")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(db.calls.find((c) => c.url.endsWith("/trace"))).toBeTruthy(),
+    );
+  });
 });

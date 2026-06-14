@@ -17,6 +17,8 @@ import {
   type TriageInput,
   type TriageResult,
   type TriageSearchFn,
+  type TriageTraceSink,
+  type TriageTraceStep,
 } from "@tq/core";
 
 /**
@@ -35,7 +37,11 @@ export class PiTriageEngine implements TriageEngine {
     return !!this.modelRegistry.find(this.cfg.triage.provider, this.cfg.triage.model);
   }
 
-  async triage(input: TriageInput, searchTasks: TriageSearchFn): Promise<TriageResult> {
+  async triage(
+    input: TriageInput,
+    searchTasks: TriageSearchFn,
+    onTrace?: TriageTraceSink,
+  ): Promise<TriageResult> {
     const model = this.modelRegistry.find(this.cfg.triage.provider, this.cfg.triage.model);
     if (!model) {
       throw new Error(
@@ -104,6 +110,13 @@ export class PiTriageEngine implements TriageEngine {
         })),
       });
     } finally {
+      if (onTrace) {
+        try {
+          onTrace(extractTrace(session.messages));
+        } catch {
+          /* tracing must never break triage */
+        }
+      }
       session.dispose();
     }
 
@@ -112,6 +125,45 @@ export class PiTriageEngine implements TriageEngine {
     }
     return captured;
   }
+}
+
+/**
+ * Distil the pi session messages into a compact, persistable transcript so the
+ * dashboard can show what the triage agent did: its reasoning text, the
+ * `search_tasks` queries it ran, the results it saw, the final `emit_triage`
+ * call, and any model error that aborted the pass.
+ */
+function extractTrace(messages: readonly unknown[]): TriageTraceStep[] {
+  const steps: TriageTraceStep[] = [];
+  for (const raw of messages) {
+    const m = raw as Record<string, unknown>;
+    if (m.role === "assistant") {
+      const content = Array.isArray(m.content) ? (m.content as Record<string, unknown>[]) : [];
+      for (const block of content) {
+        if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
+          steps.push({ kind: "thought", text: block.text.trim() });
+        } else if (block.type === "toolCall" && typeof block.name === "string") {
+          steps.push({ kind: "tool_call", tool: block.name, args: block.arguments ?? {} });
+        }
+      }
+      if (m.stopReason === "error" && typeof m.errorMessage === "string") {
+        steps.push({ kind: "error", text: m.errorMessage });
+      }
+    } else if (m.role === "toolResult") {
+      const content = Array.isArray(m.content) ? (m.content as Record<string, unknown>[]) : [];
+      const text = content
+        .filter((b) => b.type === "text" && typeof b.text === "string")
+        .map((b) => b.text as string)
+        .join("\n");
+      steps.push({
+        kind: "tool_result",
+        tool: typeof m.toolName === "string" ? m.toolName : "tool",
+        ok: m.isError !== true,
+        text,
+      });
+    }
+  }
+  return steps;
 }
 
 function buildUserPrompt(input: TriageInput): string {

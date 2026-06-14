@@ -111,6 +111,27 @@ describe("intake + search routes", () => {
     expect(res.json().taskId).toBeTruthy();
   });
 
+  it("serves the triage transcript and omits it from list/detail payloads", async () => {
+    const intake = (
+      await app.inject({ method: "POST", url: "/api/intake", payload: { text: "trace me" } })
+    ).json();
+    store.intake.setTriageTrace(intake.id, [
+      { kind: "thought", text: "hello" },
+      { kind: "tool_call", tool: "search_tasks", args: { query: "x" } },
+    ]);
+
+    const trace = await app.inject({ method: "GET", url: `/api/intake/${intake.id}/trace` });
+    expect(trace.statusCode).toBe(200);
+    expect(trace.json().trace).toHaveLength(2);
+    expect(trace.json().trace[0]).toEqual({ kind: "thought", text: "hello" });
+
+    // Trace is large; it must not bloat the list or detail responses.
+    const list = await app.inject({ method: "GET", url: "/api/intake" });
+    expect(list.json().intake[0]).not.toHaveProperty("triage_trace");
+    const detail = await app.inject({ method: "GET", url: `/api/intake/${intake.id}` });
+    expect(detail.json()).not.toHaveProperty("triage_trace");
+  });
+
   it("hybrid search returns fts hits flagged vector:false", async () => {
     await app.inject({
       method: "POST",
