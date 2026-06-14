@@ -14,6 +14,18 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   dropped: "Dropped",
 };
 
+/** Compact "time in current state" label, e.g. 5m / 3h / 2d / 4w. */
+function durationSince(iso: string): string {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.round(h / 24);
+  if (d < 7) return `${d}d`;
+  return `${Math.round(d / 7)}w`;
+}
+
 export function BoardCard({
   task,
   overlay,
@@ -49,10 +61,10 @@ export function BoardCard({
           onClick={() => !overlay && navigate(`/task/${task.id}`)}
         >
           {task.title}
+          {task.priority && (
+            <span className={`prio prio-${task.priority}`}>{task.priority}</span>
+          )}
         </div>
-        {task.priority && (
-          <span className={`prio prio-${task.priority}`}>{task.priority}</span>
-        )}
       </div>
 
       {(task.labels.length > 0 || task.refs.length > 0) && (
@@ -84,7 +96,12 @@ export function BoardCard({
         <span className="bcard-id" title={task.id}>
           {task.id.slice(0, 8)}
         </span>
-        <span className={`status-dot status-${task.status}`}>{STATUS_LABELS[task.status]}</span>
+        <span
+          className="bcard-age"
+          title={`In ${STATUS_LABELS[task.status]} for ${durationSince(task.status_changed_at)}`}
+        >
+          {durationSince(task.status_changed_at)} in state
+        </span>
       </div>
     </article>
   );

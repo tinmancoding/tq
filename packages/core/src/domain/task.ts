@@ -49,6 +49,7 @@ interface TaskRow {
   created_at: string;
   updated_at: string;
   done_at: string | null;
+  status_changed_at: string;
 }
 
 export class TaskRepo {
@@ -66,9 +67,9 @@ export class TaskRepo {
         .prepare(
           `INSERT INTO task
              (id, title, body, status, priority, due_at, snooze_until, board_rank,
-              created_by, created_at, updated_at, done_at)
+              created_by, created_at, updated_at, done_at, status_changed_at)
            VALUES (@id, @title, @body, @status, @priority, @due_at, @snooze_until,
-                   @board_rank, @created_by, @created_at, @updated_at, @done_at)`,
+                   @board_rank, @created_by, @created_at, @updated_at, @done_at, @status_changed_at)`,
         )
         .run({
           id,
@@ -83,6 +84,7 @@ export class TaskRepo {
           created_at: ts,
           updated_at: ts,
           done_at: status === "done" ? ts : null,
+          status_changed_at: ts,
         });
       for (const l of input.labels ?? []) this.insertLabel(id, l);
       for (const r of input.refs ?? []) this.insertRef(id, r);
@@ -189,10 +191,11 @@ export class TaskRepo {
           `UPDATE task SET status = @status,
              board_rank = COALESCE(@board_rank, board_rank),
              done_at = CASE WHEN @status = 'done' THEN @ts ELSE NULL END,
+             status_changed_at = CASE WHEN @prev_status <> @status THEN @ts ELSE status_changed_at END,
              updated_at = @ts
            WHERE id = @id`,
         )
-        .run({ id, status, board_rank: boardRank ?? null, ts });
+        .run({ id, status, board_rank: boardRank ?? null, ts, prev_status: existing.status });
       if (existing.status !== status) {
         this.insertActivity(id, {
           entry_type: "system",

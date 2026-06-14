@@ -232,10 +232,10 @@ body {
   font-size: 10px;
   color: var(--text-dim);
 }
-.status-dot {
+.bcard-age {
   font-size: 10px;
   color: var(--text-dim);
-  text-transform: lowercase;
+  white-space: nowrap;
 }
 
 /* card action menu */
@@ -296,11 +296,15 @@ body {
   color: #fff;
 }
 .prio {
+  display: inline-block;
   font-size: 10px;
-  padding: 1px 6px;
+  padding: 0 6px;
+  margin-left: 6px;
   border-radius: 999px;
   white-space: nowrap;
-  height: fit-content;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
 }
 .prio-high {
   color: var(--bad);

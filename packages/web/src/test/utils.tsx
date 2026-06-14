@@ -59,6 +59,7 @@ export function makeTask(over: Partial<Task> = {}): Task {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     done_at: null,
+    status_changed_at: new Date().toISOString(),
     labels: [],
     refs: [],
     ...over,

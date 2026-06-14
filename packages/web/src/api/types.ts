@@ -53,6 +53,7 @@ export interface Task {
   created_at: string;
   updated_at: string;
   done_at: string | null;
+  status_changed_at: string;
   labels: Label[];
   refs: TaskRef[];
 }

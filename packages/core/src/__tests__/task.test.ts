@@ -36,6 +36,20 @@ describe("TaskRepo", () => {
     expect(acts[0]!.meta).toEqual({ from: "backlog", to: "doing" });
   });
 
+  it("stamps status_changed_at on create and only when status actually changes", () => {
+    const t = store.tasks.create({ title: "x" });
+    expect(t.status_changed_at).toBe(t.created_at);
+
+    // Re-ordering within the same status (rank only) must not reset the clock.
+    const sameStatus = store.tasks.move(t.id, "backlog", "V")!;
+    expect(sameStatus.status_changed_at).toBe(t.status_changed_at);
+
+    // A real status change advances it.
+    const moved = store.tasks.move(t.id, "doing")!;
+    expect(moved.status_changed_at >= t.status_changed_at).toBe(true);
+    expect(moved.status_changed_at).toBe(moved.updated_at);
+  });
+
   it("resolves unambiguous id prefixes and rejects ambiguous ones", () => {
     const t = store.tasks.create({ title: "only one" });
     expect(store.tasks.resolveId(t.id.slice(0, 12))).toBe(t.id);
