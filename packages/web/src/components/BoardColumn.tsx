@@ -7,12 +7,12 @@ export function BoardColumn({
   status,
   label,
   tasks,
-  onSelectMove,
+  onMove,
 }: {
   status: TaskStatus;
   label: string;
   tasks: Task[];
-  onSelectMove: (id: string, status: TaskStatus) => void;
+  onMove: (id: string, status: TaskStatus) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -31,7 +31,7 @@ export function BoardColumn({
           strategy={verticalListSortingStrategy}
         >
           {tasks.map((task) => (
-            <BoardCard key={task.id} task={task} onSelectMove={onSelectMove} />
+            <BoardCard key={task.id} task={task} onMove={onMove} />
           ))}
         </SortableContext>
         {tasks.length === 0 && <div className="col-empty">—</div>}

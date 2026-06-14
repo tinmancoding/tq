@@ -127,8 +127,8 @@ export function Board() {
     }
   }
 
-  // Deterministic, accessible move path (also used by tests / cmux).
-  async function moveViaSelect(id: string, status: TaskStatus) {
+  // Deterministic move path used by the card action menu (and tests / cmux).
+  async function moveTo(id: string, status: TaskStatus) {
     const cols = view!;
     const target = cols[status];
     const lastRank = target[target.length - 1]?.board_rank ?? null;
@@ -175,7 +175,7 @@ export function Board() {
               status={status}
               label={COLUMN_LABELS[status]}
               tasks={view[status]}
-              onSelectMove={moveViaSelect}
+              onMove={moveTo}
             />
           ))}
         </div>

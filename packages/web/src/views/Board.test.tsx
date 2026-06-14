@@ -21,7 +21,7 @@ describe("Board", () => {
     expect(screen.getByTestId("board-counts")).toHaveTextContent("2 tasks");
   });
 
-  it("moves a task to another status via the select affordance with a rank", async () => {
+  it("moves a task to another status via the card menu with a rank", async () => {
     const user = userEvent.setup();
     db.board = {
       backlog: [makeTask({ id: "t1", title: "Movable", board_rank: "V" })],
@@ -31,7 +31,9 @@ describe("Board", () => {
 
     await screen.findByText("Movable");
     const card = screen.getByTestId("board-card");
-    await user.selectOptions(within(card).getByTestId("move-select"), "doing");
+    await user.click(within(card).getByTestId("card-menu"));
+    await user.click(screen.getByTestId("menu-move"));
+    await user.click(screen.getByTestId("move-to-doing"));
 
     await waitFor(() => {
       const call = db.calls.find((c) => c.url === "/tasks/t1/move");
@@ -40,6 +42,21 @@ describe("Board", () => {
       expect(body.status).toBe("doing");
       expect(typeof body.board_rank).toBe("string");
     });
+  });
+
+  it("offers View details and hides the current status from Move to", async () => {
+    const user = userEvent.setup();
+    db.board = { backlog: [makeTask({ id: "t1", title: "Menu task" })] };
+    renderWithClient(<Board />);
+
+    await screen.findByText("Menu task");
+    const card = screen.getByTestId("board-card");
+    await user.click(within(card).getByTestId("card-menu"));
+    expect(screen.getByTestId("menu-view-details")).toBeInTheDocument();
+    await user.click(screen.getByTestId("menu-move"));
+    // current column (backlog) is excluded from the move targets
+    expect(screen.queryByTestId("move-to-backlog")).not.toBeInTheDocument();
+    expect(screen.getByTestId("move-to-done")).toBeInTheDocument();
   });
 
   it("appends with an increasing rank when the target column already has ranked cards", async () => {
@@ -53,7 +70,9 @@ describe("Board", () => {
     await screen.findByText("Mover");
     const movers = screen.getAllByTestId("board-card");
     const moverCard = movers.find((c) => within(c).queryByText("Mover"))!;
-    await user.selectOptions(within(moverCard).getByTestId("move-select"), "done");
+    await user.click(within(moverCard).getByTestId("card-menu"));
+    await user.click(screen.getByTestId("menu-move"));
+    await user.click(screen.getByTestId("move-to-done"));
 
     await waitFor(() => {
       const call = db.calls.find((c) => c.url === "/tasks/t1/move");

@@ -185,6 +185,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 10px;
+  position: relative;
 }
 .bcard-overlay {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -196,6 +197,7 @@ body {
   justify-content: space-between;
   gap: 6px;
   cursor: grab;
+  padding-right: 20px;
 }
 .bcard-title {
   font-size: 13px;
@@ -230,13 +232,68 @@ body {
   font-size: 10px;
   color: var(--text-dim);
 }
-.move-select {
-  background: var(--bg);
+.status-dot {
+  font-size: 10px;
   color: var(--text-dim);
-  border: 1px solid var(--border);
+  text-transform: lowercase;
+}
+
+/* card action menu */
+.bcard-menu-wrap {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 3;
+}
+.bcard-menu-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
   border-radius: 6px;
-  font-size: 11px;
-  padding: 2px 4px;
+  cursor: pointer;
+}
+.bcard-menu-btn:hover,
+.bcard-menu-btn[aria-expanded="true"] {
+  background: var(--bg);
+  color: var(--text);
+}
+.card-popover {
+  position: fixed;
+  z-index: 50;
+  min-width: 130px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.popover-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  padding: 4px 8px 2px;
+}
+.popover-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.popover-item:hover {
+  background: var(--accent);
+  color: #fff;
 }
 .prio {
   font-size: 10px;
