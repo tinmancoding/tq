@@ -83,6 +83,12 @@ pnpm test          # backend (vitest, node) + web (vitest, jsdom + RTL + MSW)
 pnpm typecheck     # tsc --noEmit across all packages incl. web
 ```
 
+> **Working on tq (esp. with an agent)?** Read [`AGENTS.md`](./AGENTS.md) and
+> [`docs/local_development.md`](./docs/local_development.md) for how to operate, verify,
+> test, and migrate each component — and how to run against a throwaway DB instead of
+> your real one (there's no dev/prod separation yet, so the default config mutates live
+> data).
+
 ## Deploy as a launchd agent
 
 ```bash
