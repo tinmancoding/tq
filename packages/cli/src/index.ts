@@ -410,7 +410,14 @@ function printTaskDetail(task: unknown): void {
 }
 
 // ─────────────────────────────── run ──────────────────────────────────
-program.parseAsync(process.argv).catch((err: unknown) => {
+// pnpm forwards a stray leading "--" separator (e.g. `pnpm --filter @tq/cli
+// start -- <args>`, used by the README alias). commander would treat that `--`
+// as end-of-options and parse every following flag as a positional (so e.g.
+// `--hard` / `--json` silently vanish). Drop a single leading "--" so flags
+// parse the same no matter how the CLI is invoked.
+const argv = [...process.argv];
+if (argv[2] === "--") argv.splice(2, 1);
+program.parseAsync(argv).catch((err: unknown) => {
   if (err instanceof CliError) {
     process.stderr.write(`error: ${err.message}\n`);
     process.exit(err.code);

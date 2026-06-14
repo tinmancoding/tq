@@ -15,11 +15,17 @@ function runtimeDir(): string {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
+// Control files are namespaced by the daemon's port so distinct config profiles
+// (TQ_CONFIG with different ports) get their own pidfile/log and don't collide
+// on a single global daemon. The spawned daemon inherits TQ_CONFIG via env.
+function daemonPort(): number {
+  return loadConfig().daemon.port;
+}
 function pidFile(): string {
-  return join(runtimeDir(), "daemon.pid");
+  return join(runtimeDir(), `daemon-${daemonPort()}.pid`);
 }
 function logFile(): string {
-  return join(runtimeDir(), "daemon.log");
+  return join(runtimeDir(), `daemon-${daemonPort()}.log`);
 }
 
 function isAlive(pid: number): boolean {

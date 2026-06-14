@@ -27,8 +27,12 @@ export class Client {
     this.base = daemonBaseUrl(this.cfg);
   }
 
-  private headers(): Record<string, string> {
-    const h: Record<string, string> = { "content-type": "application/json" };
+  private headers(hasBody: boolean): Record<string, string> {
+    const h: Record<string, string> = {};
+    // Only declare a JSON body when one is actually sent: Fastify rejects a
+    // bodyless request that still carries `content-type: application/json`
+    // ("Body cannot be empty..."), which would break every DELETE.
+    if (hasBody) h["content-type"] = "application/json";
     if (this.cfg.client.token) h["x-tq-token"] = this.cfg.client.token;
     else if (this.cfg.client.actor) h["x-tq-actor"] = this.cfg.client.actor;
     return h;
@@ -43,7 +47,7 @@ export class Client {
     try {
       res = await fetch(`${this.base}${path}`, {
         method,
-        headers: this.headers(),
+        headers: this.headers(body !== undefined),
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
     } catch {
