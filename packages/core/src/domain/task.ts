@@ -65,7 +65,7 @@ export class TaskRepo {
     const id = newId();
     const ts = now();
     const status = input.status ?? "backlog";
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
         .prepare(
           `INSERT INTO task
@@ -190,7 +190,7 @@ export class TaskRepo {
       }
     }
     fields.push(`updated_at = @updated_at`);
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db.prepare(`UPDATE task SET ${fields.join(", ")} WHERE id = @id`).run(params);
       if ("title" in input || "body" in input) {
         this.reindex(id);
@@ -215,7 +215,7 @@ export class TaskRepo {
     if (!existing) return null;
     if (!TASK_STATUSES.includes(status)) return null;
     const ts = now();
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
         .prepare(
           `UPDATE task SET status = @status,
@@ -253,7 +253,7 @@ export class TaskRepo {
     const existing = this.get(id);
     if (!existing) return false;
     if (hard) {
-      const tx = this.db.transaction(() => {
+      const tx = this.events.transaction(() => {
         this.events.append({
           type: "TaskDeleted",
           scopeType: "task",
@@ -276,7 +276,7 @@ export class TaskRepo {
   // ── labels ──
   addLabel(id: string, label: Label): Task | null {
     if (!this.get(id)) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.insertLabel(id, label);
       this.reindex(id);
       this.events.append({
@@ -295,7 +295,7 @@ export class TaskRepo {
 
   removeLabel(id: string, label: Label): Task | null {
     if (!this.get(id)) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
         .prepare(`DELETE FROM task_label WHERE task_id = ? AND key = ? AND value = ?`)
         .run(id, label.key, label.value);
@@ -318,7 +318,7 @@ export class TaskRepo {
   addRef(id: string, ref: Omit<TaskRef, "id" | "task_id">): TaskRef | null {
     if (!this.get(id)) return null;
     let refId = "";
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       refId = this.insertRef(id, ref);
       this.events.append({
         type: "RefAdded",
@@ -346,7 +346,7 @@ export class TaskRepo {
   ): Activity | null {
     if (!this.get(id)) return null;
     let actId = "";
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       actId = this.insertActivity(id, entry);
       if (entry.entry_type === "worklog") {
         this.events.append({

@@ -68,7 +68,7 @@ export class ContextRepo {
     }
 
     const next = { ...current, [namespace]: stored };
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
         .prepare(`UPDATE ${SCOPE_TABLES[scope]} SET context = ? WHERE id = ?`)
         .run(JSON.stringify(next), id);

@@ -13,36 +13,44 @@ export const qk = {
   jobs: () => ["jobs"] as const,
 };
 
-// SSE event names the daemon emits (design §8).
-const INTAKE_EVENTS = [
-  "intake.created",
-  "intake.triaged",
-  "intake.promoted",
-  "intake.discarded",
-];
+/** The PascalCase domain event types the daemon streams (design Q4 catalog). */
 const TASK_EVENTS = [
-  "task.created",
-  "task.updated",
-  "task.moved",
-  "task.activity",
+  "TaskCreated",
+  "TaskUpdated",
+  "TaskMoved",
+  "TaskDeleted",
+  "LabelAdded",
+  "LabelRemoved",
+  "RefAdded",
+  "WorkLogged",
+  "CommentAdded",
 ];
-const JOB_EVENTS = [
-  "job.queued",
-  "job.started",
-  "job.done",
-  "job.error",
-  "jobs.summary",
-  "daemon.status",
+const INTAKE_EVENTS = [
+  "IntakeCaptured",
+  "IntakeStatusChanged",
+  "IntakePromoted",
+  "IntakeLinked",
 ];
+
+interface EventEnvelope {
+  seq: number;
+  type: string;
+  scope_type: "task" | "intake" | "global";
+  scope_id: string | null;
+  payload: unknown;
+}
+
 export interface StreamStatus {
   connected: boolean;
   lastEventAt: number | null;
 }
 
 /**
- * Single EventSource against /api/events. Domain events invalidate the
- * relevant TanStack Query caches so views live-update. We invalidate (rather
- * than patch) for correctness first; optimistic patches live in mutations.
+ * Single EventSource against the durable /api/events stream. Each message is a
+ * domain-event envelope ({seq, type, scope_type, scope_id, payload}); we
+ * invalidate the relevant TanStack Query caches by scope. Native EventSource
+ * reconnect resends Last-Event-ID, which the daemon treats as the `since`
+ * cursor — so a dropped connection resumes without gaps.
  */
 export function useEventStream(onStatus?: (s: StreamStatus) => void): void {
   const qc = useQueryClient();
@@ -50,51 +58,41 @@ export function useEventStream(onStatus?: (s: StreamStatus) => void): void {
   useEffect(() => {
     const es = new EventSource("/api/events");
 
-    const invalidate = (keys: readonly (readonly unknown[])[]) => {
-      for (const key of keys)
-        void qc.invalidateQueries({ queryKey: key as unknown[] });
-    };
-
     const bumpStatus = (connected: boolean) =>
       onStatus?.({ connected, lastEventAt: Date.now() });
 
+    const invalidate = (keys: readonly (readonly unknown[])[]) => {
+      for (const key of keys) void qc.invalidateQueries({ queryKey: key as unknown[] });
+    };
+
+    const handle = (e: MessageEvent) => {
+      bumpStatus(true);
+      let ev: EventEnvelope;
+      try {
+        ev = JSON.parse(e.data) as EventEnvelope;
+      } catch {
+        return;
+      }
+      if (ev.scope_type === "task") {
+        invalidate([["task", "list"], qk.board(), qk.health(), qk.jobs()]);
+        if (ev.scope_id) void qc.invalidateQueries({ queryKey: qk.task(ev.scope_id) });
+      } else if (ev.scope_type === "intake") {
+        // promote/link affect tasks + board too
+        invalidate([["intake", "list"], ["task", "list"], qk.board(), qk.health(), qk.jobs()]);
+        if (ev.scope_id) void qc.invalidateQueries({ queryKey: qk.intake(ev.scope_id) });
+      }
+    };
+
     es.onopen = () => bumpStatus(true);
     es.onerror = () => bumpStatus(false);
-
-    for (const name of INTAKE_EVENTS) {
-      es.addEventListener(name, (e) => {
-        invalidate([["intake", "list"], ["task", "list"], qk.board(), qk.health()]);
-        const id = parseId(e);
-        if (id) void qc.invalidateQueries({ queryKey: qk.intake(id) });
-        bumpStatus(true);
-      });
+    for (const name of [...TASK_EVENTS, ...INTAKE_EVENTS, "ContextUpdated"]) {
+      es.addEventListener(name, handle as EventListener);
     }
-
-    for (const name of TASK_EVENTS) {
-      es.addEventListener(name, (e) => {
-        invalidate([["task", "list"], qk.board(), qk.health()]);
-        const id = parseId(e);
-        if (id) void qc.invalidateQueries({ queryKey: qk.task(id) });
-        bumpStatus(true);
-      });
-    }
-
-    for (const name of JOB_EVENTS) {
-      es.addEventListener(name, () => {
-        invalidate([qk.jobs(), qk.health()]);
-        bumpStatus(true);
-      });
-    }
+    es.addEventListener("heartbeat", () => {
+      invalidate([qk.health(), qk.jobs()]);
+      bumpStatus(true);
+    });
 
     return () => es.close();
   }, [qc, onStatus]);
-}
-
-function parseId(e: MessageEvent): string | undefined {
-  try {
-    const data = JSON.parse(e.data);
-    return data?.id ?? data?.intake?.id ?? data?.task?.id ?? data?.task_id;
-  } catch {
-    return undefined;
-  }
 }

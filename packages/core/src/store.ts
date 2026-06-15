@@ -7,6 +7,7 @@ import { JobRepo } from "./domain/job.js";
 import { AttachmentRepo } from "./domain/attachment.js";
 import { EventStore } from "./domain/event.js";
 import { ContextRepo } from "./domain/context.js";
+import { SubscriptionRepo } from "./domain/subscription.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -30,11 +31,13 @@ export class Store {
   readonly jobs: JobRepo;
   readonly attachments: AttachmentRepo;
   readonly context: ContextRepo;
+  readonly subscriptions: SubscriptionRepo;
 
   constructor(db: DB, opts: { bus?: EventBus; attachmentsDir?: string; contextSpillBytes?: number } = {}) {
     this.db = db;
     this.bus = opts.bus ?? new EventBus();
-    this.events = new EventStore(db);
+    this.events = new EventStore(db, this.bus);
+    this.subscriptions = new SubscriptionRepo(db);
     this.tasks = new TaskRepo(db, this.bus, this.events);
     this.intake = new IntakeRepo(db, this.bus, this.tasks, this.events);
     this.jobs = new JobRepo(db, this.bus);

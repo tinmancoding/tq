@@ -9,7 +9,7 @@ import { registerJobRoutes } from "./routes/jobs.js";
 import { registerSystemRoutes } from "./routes/system.js";
 import { registerAttachmentRoutes } from "./routes/attachments.js";
 import { registerContextRoutes } from "./routes/context.js";
-import { registerSse } from "./sse.js";
+import { registerEventRoutes } from "./routes/events.js";
 import { registerStatic } from "./static.js";
 
 export interface BuildOptions {
@@ -27,6 +27,15 @@ export function buildServer(opts: BuildOptions): FastifyInstance {
   const app = Fastify({
     logger: opts.logger ?? false,
   }).withTypeProvider<TypeBoxTypeProvider>();
+
+  // Stamp every JSON read response with the as-of global seq, so clients can
+  // snapshot-then-tail (read state, then GET /api/events?since=<seq>).
+  app.addHook("onSend", (req, reply, payload, done) => {
+    if (req.method === "GET" && !reply.getHeader("x-tq-seq")) {
+      reply.header("X-TQ-Seq", String(opts.store.events.maxSeq()));
+    }
+    done(null, payload);
+  });
 
   app.setErrorHandler((err: FastifyError, _req, reply) => {
     const status = err.statusCode ?? 500;
@@ -49,7 +58,7 @@ export function buildServer(opts: BuildOptions): FastifyInstance {
   registerJobRoutes(app, opts.store);
   registerAttachmentRoutes(app, opts.store);
   registerContextRoutes(app, opts.store);
-  registerSse(app, opts.store, startedAt);
+  registerEventRoutes(app, opts.store, startedAt);
 
   if (opts.webDist) registerStatic(app, opts.webDist);
 

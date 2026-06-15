@@ -16,7 +16,8 @@ export type TqEventName =
   | "job.error"
   | "jobs.summary"
   | "watchlist.polled"
-  | "daemon.status";
+  | "daemon.status"
+  | "@event";
 
 export interface TqEvent {
   event: TqEventName;

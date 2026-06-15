@@ -74,7 +74,7 @@ export class IntakeRepo {
     let createdId = id;
     let created = true;
 
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       const res = this.db
         .prepare(
           `INSERT OR IGNORE INTO intake
@@ -176,7 +176,7 @@ export class IntakeRepo {
   setTriageResult(id: string, result: TriageResult): Intake | null {
     const prev = this.get(id);
     if (!prev) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
         .prepare(
           `UPDATE intake SET triage = ?, triage_error = NULL, status = 'triaged', triaged_at = ?
@@ -228,7 +228,7 @@ export class IntakeRepo {
     }));
 
     let taskId = "";
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       const task = this.tasks.create({
         title,
         body,
@@ -275,7 +275,7 @@ export class IntakeRepo {
     const intake = this.get(id);
     if (!intake) return null;
     if (!this.tasks.get(taskId)) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.linkInternal(id, taskId, relation);
       this.tasks.addActivity(taskId, {
         entry_type: "system",
@@ -310,7 +310,7 @@ export class IntakeRepo {
   discard(id: string, reason: string): Intake | null {
     const prev = this.get(id);
     if (!prev) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
         .prepare(`UPDATE intake SET status = 'discarded', discard_reason = ? WHERE id = ?`)
         .run(reason, id);
@@ -332,7 +332,7 @@ export class IntakeRepo {
   retriage(id: string): Intake | null {
     const intake = this.get(id);
     if (!intake) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
         .prepare(`UPDATE intake SET status = 'new', triage_error = NULL, triage_trace = NULL WHERE id = ?`)
         .run(id);

@@ -23,6 +23,12 @@ export {
   type ReplayRef,
 } from "./projection/reduce.js";
 export { backfillEvents, type BackfillResult } from "./projection/backfill.js";
+export {
+  SubscriptionRepo,
+  type Subscription,
+  type SubscriptionFilters,
+  type DeadLetter,
+} from "./domain/subscription.js";
 export { Store } from "./store.js";
 export { openDb, type DB, type OpenDbOptions } from "./db/sqlite.js";
 

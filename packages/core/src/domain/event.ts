@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { EventBus } from "../events.js";
 import { newId, now } from "./ids.js";
 
 export type EventScopeType = "task" | "intake" | "global";
@@ -50,8 +51,14 @@ interface RawEventRow extends Omit<EventRow, "payload"> {
 export class EventStore {
   private readonly insertStmt: Database.Statement;
   private readonly streamSeqStmt: Database.Statement;
+  /** Events appended in the current (possibly nested) transaction, flushed to
+   *  the bus only after the outermost commit. */
+  private pending: EventRow[] = [];
 
-  constructor(private readonly db: Database.Database) {
+  constructor(
+    private readonly db: Database.Database,
+    private readonly bus: EventBus,
+  ) {
     this.streamSeqStmt = db.prepare(
       `SELECT COALESCE(MAX(stream_seq), 0) AS m FROM event WHERE scope_type = ? AND scope_id IS ?`,
     );
@@ -61,6 +68,33 @@ export class EventStore {
        VALUES
          (@stream_seq, @id, @type, @scope_type, @scope_id, @actor, @payload, @schema_version, @correlation_id, @created_at)`,
     );
+  }
+
+  /**
+   * Mirrors better-sqlite3's `db.transaction`: returns a function that runs `fn`
+   * in a transaction and, on the OUTERMOST commit, flushes every event appended
+   * during it to the bus as `@event` (carrying the persisted envelope incl.
+   * `seq`). Nested calls (e.g. promote → tasks.create) buffer into the same
+   * batch and flush once. A rollback discards the buffer (nothing emitted).
+   */
+  transaction<T>(fn: () => T): () => T {
+    const run = this.db.transaction(fn);
+    return (): T => {
+      const top = !this.db.inTransaction;
+      let result: T;
+      try {
+        result = run();
+      } catch (err) {
+        if (top) this.pending = [];
+        throw err;
+      }
+      if (top && this.pending.length > 0) {
+        const flush = this.pending;
+        this.pending = [];
+        for (const ev of flush) this.bus.emit("@event", ev);
+      }
+      return result;
+    };
   }
 
   append(input: AppendEventInput): EventRow {
@@ -82,7 +116,7 @@ export class EventStore {
       correlation_id: input.correlationId ?? null,
       created_at: ts,
     });
-    return {
+    const row: EventRow = {
       seq: Number(info.lastInsertRowid),
       stream_seq: streamSeq,
       id,
@@ -95,6 +129,8 @@ export class EventStore {
       correlation_id: input.correlationId ?? null,
       created_at: ts,
     };
+    this.pending.push(row);
+    return row;
   }
 
   /** Read events in global `seq` order. Used by the SSE stream (Phase D). */
