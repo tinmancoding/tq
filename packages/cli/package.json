@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@tq/core": "workspace:*",
-    "commander": "^12.1.0"
+    "commander": "^12.1.0",
+    "@tq/contract": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

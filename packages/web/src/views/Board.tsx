@@ -194,7 +194,7 @@ function normalize(board: Record<string, Task[]>): BoardState {
   return out;
 }
 function isStatus(id: string): id is TaskStatus {
-  return (TASK_STATUSES as string[]).includes(id);
+  return (TASK_STATUSES as readonly string[]).includes(id);
 }
 function findColumn(cols: BoardState, cardId: string): TaskStatus | null {
   for (const s of TASK_STATUSES) {
