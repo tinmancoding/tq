@@ -1,9 +1,18 @@
 # Event-Driven Core + Extensions — Architecture Design
 
-> **Status:** design agreed (interview with Laci, 2026-06-15), ready to plan implementation.
+> **Status:** **implemented** — the strangler-fig refactor (phases A–I, see
+> `docs/event-driven-implementation-plan.md`) is complete and green. This document is the
+> enduring design + decision ledger; the codebase now reflects it.
 > **Supersedes:** the in-daemon orchestration model in `intake-triage-design.md` (triage worker
 > pool, in-core search, workspaces/sessions) and **fully replaces** `docs/workspaces-sessions-plan.md`
 > (workspaces/sessions are removed; see §10).
+>
+> **As-built deviations from the ledger below** (both deliberate, see the plan doc):
+> 1. **No OpenAPI codegen** (Q6) — `@tq/contract` derives types from TypeBox via `Static<>`,
+>    so there's nothing to generate or keep in sync; a `tsc` parity test is the gate.
+> 2. **Default embedder is a zero-dep local `HashEmbedder`** (Q9), not Transformers.js
+>    `bge-small`. It removes the AWS hard-dependency without shipping a model download;
+>    Titan is the quality opt-in and the `Embedder` interface stays pluggable.
 >
 > **One-line vision:** a *minimal, authoritative core* that owns task/intake state and an
 > append-only event log; everything else (triage, semantic search, future workspaces) is an

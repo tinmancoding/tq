@@ -10,6 +10,15 @@
 > - Each phase ends **green** (`pnpm test` + `pnpm typecheck`) and the app still works end-to-end.
 > - Migrations are forward-only, numbered `NNNN_*.sql`, applied in one tx by `runMigrations`.
 
+> **Status: COMPLETE.** All phases A–I are implemented, green (`pnpm test` + `pnpm typecheck`),
+> and verified end-to-end (triage + semantic search smoke-tested live against Bedrock). Commits:
+> A `a6cde8e`, B `1e9d643`, C `359d4a9`, D `be07239`, E `4d0776b`, F `0aca616`, G `624663c`
+> (+ G2 cleanup `b6375ca`), H `a2a1d6f`, I (this polish). Two deliberate deviations from the
+> ledger: **(E)** no OpenAPI codegen — `@tq/contract` derives types from TypeBox (`tsc` is the
+> gate); **(H)** default embedder is a zero-dep local `HashEmbedder`, with Titan as the quality
+> opt-in (the `Embedder` interface stays pluggable for a future Transformers.js provider).
+> The `fold(log) == state` invariant (Q10) is guarded by `packages/core/src/__tests__/replay.test.ts`.
+
 ---
 
 ## 0. Conventions established up front

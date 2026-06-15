@@ -15,6 +15,9 @@ auto_create_confidence = 0.8
 label_vocabulary = ["project", "person", "area", "ticket", "source", "repo"]
 
 [embeddings]
+# Embedder used by the @tq/ext-search-semantic extension.
+# provider = "local" → HashEmbedder (offline, zero-dep, no AWS); "titan" → Bedrock.
+provider = "titan"
 model = "amazon.titan-embed-text-v2:0"
 dims = 1024
 
@@ -35,6 +38,10 @@ actor = "human:laci"
 github = { env = "GITHUB_TOKEN" }
 
 # Extensions are subscribers that react to the event log and act through the
-# public API. Enable per name; the block is passed to the extension as config.
-# [extensions.triage]
-# enabled = true
+# public API (never touching core internals). Enable per name; the whole block
+# is passed to the extension as its config. Both are enabled by default.
+[extensions.triage]
+enabled = true
+
+[extensions.search-semantic]
+enabled = true
