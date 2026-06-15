@@ -8,7 +8,6 @@ import { createExtensionHost, type ExtensionHost } from "./extensions/host.js";
 import { registerTaskRoutes } from "./routes/tasks.js";
 import { registerIntakeRoutes } from "./routes/intake.js";
 import { registerSearchRoutes } from "./routes/search.js";
-import { registerJobRoutes } from "./routes/jobs.js";
 import { registerSystemRoutes } from "./routes/system.js";
 import { registerAttachmentRoutes } from "./routes/attachments.js";
 import { registerContextRoutes } from "./routes/context.js";
@@ -65,7 +64,6 @@ export function buildServer(opts: BuildOptions): TqServer {
   registerTaskRoutes(app, opts.store);
   registerIntakeRoutes(app, opts.store);
   registerSearchRoutes(app, opts.store, opts.embedder);
-  registerJobRoutes(app, opts.store);
   registerAttachmentRoutes(app, opts.store);
   registerContextRoutes(app, opts.store);
   registerEventRoutes(app, opts.store, startedAt);

@@ -154,13 +154,6 @@ export interface TaskDetail extends Task {
   linked_intakes: LinkedIntake[];
 }
 
-export interface JobCounts {
-  queued: number;
-  running: number;
-  done: number;
-  error: number;
-}
-
 export interface SubscriptionHealth {
   consumer_id: string;
   cursor: number;
@@ -173,7 +166,6 @@ export interface HealthSnapshot {
   ok: boolean;
   version: string;
   uptime_sec: number;
-  jobs: JobCounts;
   counts: { tasks: number; intake: number };
   seq?: number;
   subscriptions?: SubscriptionHealth[];

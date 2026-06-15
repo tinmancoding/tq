@@ -38,7 +38,6 @@ export {
   type CreateIntakeInput,
   type PromoteInput,
 } from "./domain/intake.js";
-export { JobRepo, type TriageJob } from "./domain/job.js";
 export {
   AttachmentRepo,
   type AttachmentMeta,

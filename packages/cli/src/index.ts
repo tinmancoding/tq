@@ -312,29 +312,6 @@ intake
     process.stdout.write("requeued\n");
   });
 
-// ─────────────────────────────── jobs ─────────────────────────────────
-const jobs = program.command("jobs").description("triage job observability");
-jobs
-  .option("--status <s>")
-  .option("--json")
-  .action(async (opts) => {
-    const qs = new URLSearchParams();
-    if (opts.status) qs.set("status", opts.status);
-    const res = await client().get<{ counts: unknown; jobs: JobItem[] }>(`/api/triage/jobs?${qs}`);
-    if (opts.json) return emit(res, true);
-    process.stdout.write(`${JSON.stringify(res.counts)}\n`);
-    for (const j of res.jobs) {
-      process.stdout.write(`${shortId(j.id)}  ${j.status.padEnd(8)} intake=${shortId(j.intake_id)} attempts=${j.attempts}\n`);
-    }
-  });
-jobs
-  .command("requeue")
-  .argument("<id>")
-  .action(async (id) => {
-    await client().post(`/api/triage/jobs/${id}/requeue`);
-    process.stdout.write("requeued\n");
-  });
-
 // ─────────────────────────────── token ────────────────────────────────
 const token = program.command("token").description("actor tokens");
 token
@@ -377,12 +354,6 @@ interface ActivityItem {
   entry_type: string;
   actor: string;
   body: string;
-}
-interface JobItem {
-  id: string;
-  intake_id: string;
-  status: string;
-  attempts: number;
 }
 interface SearchResp {
   vector: boolean;

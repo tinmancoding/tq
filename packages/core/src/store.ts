@@ -3,7 +3,6 @@ import { openDb, type OpenDbOptions } from "./db/sqlite.js";
 import { EventBus } from "./events.js";
 import { TaskRepo } from "./domain/task.js";
 import { IntakeRepo } from "./domain/intake.js";
-import { JobRepo } from "./domain/job.js";
 import { AttachmentRepo } from "./domain/attachment.js";
 import { EventStore } from "./domain/event.js";
 import { ContextRepo } from "./domain/context.js";
@@ -28,7 +27,6 @@ export class Store {
   readonly events: EventStore;
   readonly tasks: TaskRepo;
   readonly intake: IntakeRepo;
-  readonly jobs: JobRepo;
   readonly attachments: AttachmentRepo;
   readonly context: ContextRepo;
   readonly subscriptions: SubscriptionRepo;
@@ -40,7 +38,6 @@ export class Store {
     this.subscriptions = new SubscriptionRepo(db);
     this.tasks = new TaskRepo(db, this.bus, this.events);
     this.intake = new IntakeRepo(db, this.bus, this.tasks, this.events);
-    this.jobs = new JobRepo(db, this.bus);
     this.attachments = new AttachmentRepo(
       db,
       opts.attachmentsDir ?? join(tmpdir(), "tq-attachments"),

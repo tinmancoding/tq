@@ -10,7 +10,6 @@ export const qk = {
   task: (id: string) => ["task", "detail", id] as const,
   transcript: (id: string) => ["transcript", id] as const,
   health: () => ["system", "health"] as const,
-  jobs: () => ["jobs"] as const,
 };
 
 /** The PascalCase domain event types the daemon streams (design Q4 catalog). */
@@ -74,11 +73,11 @@ export function useEventStream(onStatus?: (s: StreamStatus) => void): void {
         return;
       }
       if (ev.scope_type === "task") {
-        invalidate([["task", "list"], qk.board(), qk.health(), qk.jobs()]);
+        invalidate([["task", "list"], qk.board(), qk.health()]);
         if (ev.scope_id) void qc.invalidateQueries({ queryKey: qk.task(ev.scope_id) });
       } else if (ev.scope_type === "intake") {
         // promote/link affect tasks + board too
-        invalidate([["intake", "list"], ["task", "list"], qk.board(), qk.health(), qk.jobs()]);
+        invalidate([["intake", "list"], ["task", "list"], qk.board(), qk.health()]);
         if (ev.scope_id) void qc.invalidateQueries({ queryKey: qk.intake(ev.scope_id) });
       }
     };
@@ -89,7 +88,7 @@ export function useEventStream(onStatus?: (s: StreamStatus) => void): void {
       es.addEventListener(name, handle as EventListener);
     }
     es.addEventListener("heartbeat", () => {
-      invalidate([qk.health(), qk.jobs()]);
+      invalidate([qk.health()]);
       bumpStatus(true);
     });
 

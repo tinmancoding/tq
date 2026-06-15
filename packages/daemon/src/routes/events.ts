@@ -96,7 +96,6 @@ export function registerEventRoutes(app: FastifyInstance, store: Store, startedA
         `data: ${JSON.stringify({
           seq: store.events.maxSeq(),
           uptime_sec: Math.round((Date.now() - startedAt) / 1000),
-          jobs: store.jobs.counts(),
           ts: new Date().toISOString(),
         })}\n\n`,
       );

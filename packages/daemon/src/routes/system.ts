@@ -19,7 +19,6 @@ export function registerSystemRoutes(
       ok: true,
       version: "0.1.0",
       uptime_sec: Math.round((Date.now() - startedAt) / 1000),
-      jobs: store.jobs.counts(),
       counts: { tasks: taskCount, intake: intakeCount },
       seq,
       subscriptions: store.subscriptions.list().map((s) => ({

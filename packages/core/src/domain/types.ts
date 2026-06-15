@@ -86,9 +86,6 @@ export interface Intake {
   body: string | null;
   action_verbs: string[] | null;
   discard_reason: string | null;
-  triage: unknown | null;
-  triage_error: string | null;
-  triage_trace: TriageTraceStep[] | null;
   labels: Record<string, string> | null;
   watchlist_id: string | null;
   created_at: string;

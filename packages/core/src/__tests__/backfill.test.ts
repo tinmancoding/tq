@@ -52,14 +52,20 @@ describe("backfillEvents (Phase C)", () => {
       )
       .run("ac1", "t1", "worklog", "agent:pi", "did work", null, "2025-01-02T00:00:00.000Z");
 
-    // Legacy intake with a triage result in the old column.
+    // Legacy intake whose triage result lives in the context bag (migration
+    // 0010 moved it there from the dropped column before backfill runs).
     store.db
       .prepare(
         `INSERT INTO intake (id, status, source, source_ref, event_sig, body, action_verbs,
-           discard_reason, triage, triage_error, labels, watchlist_id, created_at, triaged_at, context)
-         VALUES (?, 'triaged', 'manual', NULL, NULL, 'look', NULL, NULL, ?, NULL, NULL, NULL, ?, ?, '{}')`,
+           discard_reason, labels, watchlist_id, created_at, triaged_at, context)
+         VALUES (?, 'triaged', 'manual', NULL, NULL, 'look', NULL, NULL, NULL, NULL, ?, ?, ?)`,
       )
-      .run("i1", JSON.stringify({ summary: "a bug", category: "bug" }), "2025-01-01T00:00:00.000Z", "2025-01-01T01:00:00.000Z");
+      .run(
+        "i1",
+        "2025-01-01T00:00:00.000Z",
+        "2025-01-01T01:00:00.000Z",
+        JSON.stringify({ triage: { summary: "a bug", category: "bug" } }),
+      );
 
     const res = backfillEvents(store);
     expect(res.alreadyDone).toBe(false);
@@ -67,7 +73,7 @@ describe("backfillEvents (Phase C)", () => {
     expect(res.intakes).toBe(1);
     expect(res.activities).toBe(1);
 
-    // The legacy triage column is migrated into context.triage.
+    // The triage result (already in context) is preserved.
     expect(store.context.get("intake", "i1")).toEqual({
       triage: { summary: "a bug", category: "bug" },
     });

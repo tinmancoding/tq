@@ -43,9 +43,6 @@ interface IntakeRow {
   body: string | null;
   action_verbs: string | null;
   discard_reason: string | null;
-  triage: string | null;
-  triage_error: string | null;
-  triage_trace: string | null;
   labels: string | null;
   watchlist_id: string | null;
   created_at: string;
@@ -343,7 +340,7 @@ export class IntakeRepo {
     if (!intake) return null;
     const tx = this.events.transaction(() => {
       this.db
-        .prepare(`UPDATE intake SET status = 'new', triage_error = NULL, triage_trace = NULL WHERE id = ?`)
+        .prepare(`UPDATE intake SET status = 'new' WHERE id = ?`)
         .run(id);
       if (intake.status !== "new") {
         this.events.append({
@@ -434,8 +431,6 @@ function hydrateIntake(row: IntakeRow): Intake {
   return {
     ...row,
     action_verbs: row.action_verbs ? JSON.parse(row.action_verbs) : null,
-    triage: row.triage ? JSON.parse(row.triage) : null,
-    triage_trace: row.triage_trace ? JSON.parse(row.triage_trace) : null,
     labels: row.labels ? JSON.parse(row.labels) : null,
     context: row.context ? JSON.parse(row.context) : {},
   };

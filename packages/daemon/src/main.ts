@@ -18,13 +18,6 @@ async function main(): Promise<void> {
     contextSpillBytes: config.context.spill_bytes,
   });
 
-  // Crash recovery: requeue any jobs left mid-flight by a previous run.
-  const recovered = store.jobs.recoverRunning();
-  if (recovered > 0) {
-    // eslint-disable-next-line no-console
-    console.error(`[tq] recovered ${recovered} stuck triage job(s)`);
-  }
-
   // Embeddings + vector backfill (only meaningful when sqlite-vec loaded).
   const embedder = new TitanEmbedder(config);
   let embeddingWorker: EmbeddingWorker | null = null;

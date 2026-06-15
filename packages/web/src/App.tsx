@@ -60,12 +60,6 @@ export function App() {
             title={stream.connected ? "SSE connected" : "SSE disconnected"}
           />
           {health.data && (
-            <span className="ops-jobs" data-testid="jobs-summary">
-              {health.data.jobs.running}▶ {health.data.jobs.queued}⏳{" "}
-              {health.data.jobs.error}✕
-            </span>
-          )}
-          {health.data && (
             <span
               className={
                 health.data.aws.reachable === false ? "aws aws-down" : "aws"

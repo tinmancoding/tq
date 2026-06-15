@@ -10,11 +10,6 @@ export type TqEventName =
   | "task.updated"
   | "task.moved"
   | "task.activity"
-  | "job.queued"
-  | "job.started"
-  | "job.done"
-  | "job.error"
-  | "jobs.summary"
   | "watchlist.polled"
   | "daemon.status"
   | "@event";
