@@ -1,6 +1,6 @@
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import type { IntakeDetail, Task, TriageTraceStep } from "../api/types";
+import type { IntakeDetail, Task, TriageTraceStep, Workspace, AgentSession } from "../api/types";
 
 // A mutable in-memory fixture the handlers read/write, so tests can assert
 // that mutations hit the server with the right payloads.
@@ -9,6 +9,8 @@ export const db = {
   triaged: [] as IntakeDetail[],
   board: {} as Record<string, Task[]>,
   trace: [] as TriageTraceStep[],
+  workspace: null as Workspace | null,
+  sessions: [] as AgentSession[],
   calls: [] as { method: string; url: string; body: unknown }[],
 };
 
@@ -17,6 +19,8 @@ export function resetDb() {
   db.triaged = [];
   db.board = {};
   db.trace = [];
+  db.workspace = null;
+  db.sessions = [];
   db.calls = [];
 }
 
@@ -90,6 +94,53 @@ export const server = setupServer(
       }
     }
     return HttpResponse.json({ id: params.id, ...body });
+  }),
+
+  http.get(`${base}/api/tasks/:id/workspace`, () => {
+    if (db.workspace) return HttpResponse.json(db.workspace);
+    return HttpResponse.json({ error: "no workspace" }, { status: 404 });
+  }),
+
+  http.post(`${base}/api/tasks/:id/workspace`, async ({ request, params }) => {
+    const body = await request.json();
+    db.calls.push({ method: "POST", url: `/tasks/${params.id}/workspace`, body });
+    const ws: Workspace = {
+      id: "ws-new",
+      task_id: String(params.id),
+      provider: (body as { provider?: string }).provider ?? "tasktree",
+      root_path: "",
+      name: "ws",
+      status: "provisioning",
+      error: null,
+      meta: null,
+      created_at: new Date().toISOString(),
+      last_seen_at: null,
+    };
+    db.workspace = ws;
+    return HttpResponse.json(ws, { status: 202 });
+  }),
+
+  http.delete(`${base}/api/tasks/:id/workspace`, ({ params }) => {
+    db.calls.push({ method: "DELETE", url: `/tasks/${params.id}/workspace`, body: null });
+    db.workspace = null;
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get(`${base}/api/tasks/:id/sessions`, () =>
+    HttpResponse.json({ sessions: db.sessions }),
+  ),
+
+  http.get(`${base}/api/sessions/:id/transcript`, () =>
+    HttpResponse.json({ transcript: db.trace, file_present: true }),
+  ),
+
+  http.post(`${base}/api/tasks/:id/sessions/start`, async ({ request, params }) => {
+    db.calls.push({
+      method: "POST",
+      url: `/tasks/${params.id}/sessions/start`,
+      body: await request.json().catch(() => null),
+    });
+    return HttpResponse.json({ launched: true, command: "cd … && pi" });
   }),
 
   http.get(`${base}/api/health`, () =>

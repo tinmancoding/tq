@@ -33,7 +33,11 @@ export class Client {
     // bodyless request that still carries `content-type: application/json`
     // ("Body cannot be empty..."), which would break every DELETE.
     if (hasBody) h["content-type"] = "application/json";
+    // TQ_ACTOR env wins over config: this is how a launched pi session reports
+    // its worklog entries as `agent:pi:<id>`.
+    const envActor = process.env.TQ_ACTOR;
     if (this.cfg.client.token) h["x-tq-token"] = this.cfg.client.token;
+    else if (envActor) h["x-tq-actor"] = envActor;
     else if (this.cfg.client.actor) h["x-tq-actor"] = this.cfg.client.actor;
     return h;
   }
@@ -82,7 +86,9 @@ export class Client {
   /** Multipart POST for intake capture with image files. */
   async postMultipart<T = unknown>(path: string, form: FormData): Promise<T> {
     const headers: Record<string, string> = {};
+    const envActor = process.env.TQ_ACTOR;
     if (this.cfg.client.token) headers["x-tq-token"] = this.cfg.client.token;
+    else if (envActor) headers["x-tq-actor"] = envActor;
     else if (this.cfg.client.actor) headers["x-tq-actor"] = this.cfg.client.actor;
     let res: Response;
     try {

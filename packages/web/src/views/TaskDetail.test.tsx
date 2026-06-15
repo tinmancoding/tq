@@ -76,4 +76,54 @@ describe("TaskDetail", () => {
       expect((call!.body as { body: string }).body).toBe("pushed a fix");
     });
   });
+
+  it("shows Create tasktree when no workspace exists and submits the modal", async () => {
+    const user = userEvent.setup();
+    mountDetail({ ...makeTask({ id: "t1" }), activity: [], linked_intakes: [] });
+
+    const createBtn = await screen.findByTestId("ws-create");
+    await user.click(createBtn);
+    await user.click(screen.getByTestId("ws-create-submit"));
+
+    await waitFor(() => {
+      const call = db.calls.find((c) => c.url === "/tasks/t1/workspace");
+      expect(call).toBeTruthy();
+    });
+  });
+
+  it("renders a ready workspace with its sessions", async () => {
+    db.workspace = {
+      id: "ws1",
+      task_id: "t1",
+      provider: "tasktree",
+      root_path: "/Users/laci/Developer/tasks/t1",
+      name: "t1",
+      status: "ready",
+      error: null,
+      meta: null,
+      created_at: new Date().toISOString(),
+      last_seen_at: null,
+    };
+    db.sessions = [
+      {
+        id: "sess1",
+        task_id: "t1",
+        workspace_id: "ws1",
+        session_file: "/x/s.jsonl",
+        cwd: "/Users/laci/Developer/tasks/t1",
+        title: "investigate the bug",
+        model: "claude",
+        message_count: 7,
+        started_at: null,
+        last_activity_at: new Date().toISOString(),
+        status: "active",
+        file_present: true,
+        created_at: new Date().toISOString(),
+      },
+    ];
+    mountDetail({ ...makeTask({ id: "t1" }), activity: [], linked_intakes: [] });
+
+    expect(await screen.findByTestId("ws-ready")).toBeInTheDocument();
+    expect(await screen.findByText("investigate the bug")).toBeInTheDocument();
+  });
 });

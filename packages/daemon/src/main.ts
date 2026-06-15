@@ -4,6 +4,12 @@ import { buildServer } from "./server.js";
 import { PiTriageEngine } from "./triage/pi-engine.js";
 import { prepareImageForTriage } from "./triage/resize-image.js";
 import { TitanEmbedder } from "./embeddings/titan.js";
+import { LocalProvider } from "./workspace/local-provider.js";
+import { TasktreeProvider } from "./workspace/tasktree-provider.js";
+import { ProviderRegistry } from "./workspace/registry.js";
+import { WorkspaceService } from "./workspace/service.js";
+import { scanForWorkspace } from "./sessions/scanner.js";
+import { join } from "node:path";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -60,8 +66,57 @@ async function main(): Promise<void> {
     );
   }
 
+  // ── Workspaces + session collection ──
+  const providers = new ProviderRegistry();
+  const tasktree = new TasktreeProvider();
+  if (tasktree.probe()) {
+    providers.register(tasktree);
+    // eslint-disable-next-line no-console
+    console.error(`[tq] workspace provider: tasktree enabled`);
+  } else {
+    // eslint-disable-next-line no-console
+    console.error(`[tq] tasktree binary not found → local provider only`);
+  }
+  providers.register(new LocalProvider(join(config.daemon.attachments_dir, "..", "workspaces")));
+  const workspaces = new WorkspaceService(store, providers);
+  const recoveredWs = await workspaces.recoverProvisioning();
+  if (recoveredWs > 0) {
+    // eslint-disable-next-line no-console
+    console.error(`[tq] recovered ${recoveredWs} interrupted workspace provision(s)`);
+  }
+
+  // Periodic session scan over ready workspaces (no live watcher in MVP).
+  const scanTick = setInterval(() => {
+    void (async () => {
+      for (const ws of store.workspaces.list({ status: "ready" })) {
+        try {
+          await scanForWorkspace(store, providers, config, ws);
+        } catch {
+          /* best-effort */
+        }
+      }
+    })();
+  }, 60_000);
+  scanTick.unref?.();
+
+  // Mirror task labels → workspace annotations on task changes (debounced).
+  const mirrorTimers = new Map<string, NodeJS.Timeout>();
+  store.bus.subscribe(({ event, data }) => {
+    if (event !== "task.updated" && event !== "task.moved") return;
+    const taskId = (data as { id?: string })?.id;
+    if (!taskId) return;
+    clearTimeout(mirrorTimers.get(taskId));
+    mirrorTimers.set(
+      taskId,
+      setTimeout(() => {
+        mirrorTimers.delete(taskId);
+        void workspaces.mirrorLabels(taskId);
+      }, 2000),
+    );
+  });
+
   const webDist = new URL("../../web/dist", import.meta.url).pathname;
-  const app = buildServer({ store, config, logger: true, embedder, webDist });
+  const app = buildServer({ store, config, logger: true, embedder, webDist, workspaces, providers });
   // eslint-disable-next-line no-console
   console.error(
     existsSync(webDist)
@@ -74,6 +129,7 @@ async function main(): Promise<void> {
     console.error(`[tq] received ${signal}, shutting down`);
     pool?.stop();
     embeddingWorker?.stop();
+    clearInterval(scanTick);
     await app.close();
     store.close();
     process.exit(0);

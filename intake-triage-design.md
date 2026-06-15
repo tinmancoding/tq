@@ -32,7 +32,8 @@ operable from a CLI, a web dashboard, and pi agents.
 
 - Multi-user / off-machine / mobile capture.
 - Executable task-action job runner (agents *operate* the system; they don't yet
-  *execute* stored task actions).
+  *execute* stored task actions). *(v2: per-task pi sessions now run real work in the
+  task's workspace — see §20.)*
 - Real auth — localhost binding is the security boundary.
 
 ---
@@ -594,6 +595,11 @@ or standard AWS env for Bedrock; embeddings use the AWS SDK default credential c
 
 ## 14. pi Integration
 
+> **⚠️ Superseded by §20 (Workspaces & Agent Sessions).** The binding key is the
+> `Tasktree.yml` annotation **`tq.task-id`**, not `metadata.labels.task-id` as written
+> below; tasktrees are linked 1:1 and tracked in tq's DB. This section is retained for
+> historical context — see §20 and `docs/workspaces-sessions-plan.md` for the live design.
+
 **v1 — skill (`skills/tq/SKILL.md`)**: documents the `task` CLI for agents. Key verbs
 pi will use: `task search`, `task show`, `task add`, `task log <id> "..."`,
 `task comment`, `task move`. Emphasize `--json` for parsing and explicit ids.
@@ -685,4 +691,34 @@ subtasks.
 - Triage category taxonomy (freeform vs controlled) — start freeform, observe, tighten.
 - Titan V2 dims: 1024 (default) vs 512 (storage) — keep 1024 unless DB size bites.
 - Soft vs hard delete default for tasks (lean: `dropped` soft state; `--hard` purges).
-```
+
+---
+
+## 20. Workspaces & Agent Sessions (v2)
+
+A workspace-anchored, terminal-first agent-session layer: every task can own a **tasktree**
+(strictly **1:1**), the daemon can **create it** and **launch real pi sessions** in it, and tq
+**collects and reads** every pi session that ran in that workspace.
+
+This supersedes §14's deferred "pi extension" sketch and corrects its stale assumption: the
+durable task↔workspace anchor is the `Tasktree.yml` annotation **`tq.task-id`** (not
+`labels.task-id`).
+
+**Key decisions** (full design + phased plan: [`docs/workspaces-sessions-plan.md`](docs/workspaces-sessions-plan.md)):
+
+- **Binding** by workspace **location (cwd)** — captures manually-started terminal sessions too.
+- **Bidirectional storage**: tq DB link + `tq.task-id` annotation; **DB is a rebuildable cache**
+  (a `scan`/reconcile rebuilds it from the tasktree registry + annotations).
+- **Abstraction**: core `Workspace` entity + `WorkspaceProvider` interface (mirrors
+  `TriageEngine`); daemon `TasktreeProvider` + `LocalProvider`. `roots()` is load-bearing.
+- **Execution**: daemon runs non-interactive tasktree ops directly; **terminal launch via a
+  config-defined launcher** (default cmux) with a print-command fallback. No command injection.
+- **Sessions** are an **indexed entity** over pi's `.jsonl` store (cheap metadata; transcript on
+  demand; scan-on-open + periodic tick; tombstones on file deletion). Surfaced as a Sessions
+  panel + read-only transcript + Resume.
+- **Interaction** via the `task` CLI taught by `skills/tq/SKILL.md`; **actor is informal
+  provenance** (`agent:pi:<sessionId>`), not authz. MCP deferred.
+- **Deletion** never removes worktrees/sessions on disk — the workspace row goes `detached`.
+- **Post-MVP**: pi extension (context-injection + active registration); triage-driven
+  declarative **source spec** (`suggested_sources` in `TriageResult`).
+

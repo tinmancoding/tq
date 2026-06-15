@@ -8,8 +8,11 @@ import { registerSearchRoutes } from "./routes/search.js";
 import { registerJobRoutes } from "./routes/jobs.js";
 import { registerSystemRoutes } from "./routes/system.js";
 import { registerAttachmentRoutes } from "./routes/attachments.js";
+import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerSse } from "./sse.js";
 import { registerStatic } from "./static.js";
+import type { WorkspaceService } from "./workspace/service.js";
+import type { ProviderRegistry } from "./workspace/registry.js";
 
 export interface BuildOptions {
   store: Store;
@@ -18,6 +21,8 @@ export interface BuildOptions {
   logger?: boolean;
   embedder?: Embedder;
   webDist?: string;
+  workspaces?: WorkspaceService;
+  providers?: ProviderRegistry;
 }
 
 /** Construct the Fastify app with all routes registered (no listen). */
@@ -47,6 +52,9 @@ export function buildServer(opts: BuildOptions): FastifyInstance {
   registerSearchRoutes(app, opts.store, opts.embedder);
   registerJobRoutes(app, opts.store);
   registerAttachmentRoutes(app, opts.store);
+  if (opts.workspaces && opts.providers) {
+    registerWorkspaceRoutes(app, opts.store, opts.workspaces, opts.providers, opts.config);
+  }
   registerSse(app, opts.store, startedAt);
 
   if (opts.webDist) registerStatic(app, opts.webDist);

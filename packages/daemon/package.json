@@ -22,7 +22,8 @@
     "@tq/core": "workspace:*",
     "fastify": "^5.2.0",
     "pino": "^9.5.0",
-    "sharp": "^0.35.1"
+    "sharp": "^0.35.1",
+    "smol-toml": "^1.3.1"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

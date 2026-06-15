@@ -17,6 +17,22 @@ export {
   type AttachmentMeta,
   type IntakeAttachment,
 } from "./domain/attachment.js";
+export {
+  WorkspaceRepo,
+  WorkspaceConflictError,
+  type CreateWorkspaceInput,
+  type WorkspaceRef,
+} from "./domain/workspace.js";
+export {
+  SessionRepo,
+  type UpsertSessionInput,
+} from "./domain/session.js";
+export {
+  type WorkspaceProvider,
+  type WorkspaceRef as ProviderWorkspaceRef,
+  type CreateWorkspaceOpts,
+  type WorkspaceInfo,
+} from "./workspace/provider.js";
 
 export {
   search,

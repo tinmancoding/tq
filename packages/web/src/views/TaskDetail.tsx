@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { taskApi } from "../api/client";
+import { taskApi, workspaceApi, sessionApi } from "../api/client";
 import { qk } from "../api/events";
 import { navigate } from "../api/router";
+import { CreateWorkspaceModal } from "../components/CreateWorkspaceModal";
+import { SessionList } from "../components/SessionList";
+import { SessionTranscript } from "../components/SessionTranscript";
 import {
   PRIORITIES,
   TASK_STATUSES,
   type Activity,
+  type AgentSession,
   type Label,
   type Priority,
   type TaskStatus,
+  type Workspace,
 } from "../api/types";
 
 const PRIORITY_OPTS = ["", ...PRIORITIES] as const;
@@ -118,6 +123,8 @@ export function TaskDetail({ id }: { id: string }) {
 
       <Refs refs={t.refs} onAdd={(r) => addRef.mutate(r)} />
 
+      <WorkspaceSection taskId={id} />
+
       {t.linked_intakes.length > 0 && (
         <div className="block">
           <h3>Linked intakes</h3>
@@ -139,6 +146,110 @@ export function TaskDetail({ id }: { id: string }) {
         busy={addActivity.isPending}
       />
     </section>
+  );
+}
+
+// ──────────────────────────── workspace + sessions ────────────────────
+function WorkspaceSection({ taskId }: { taskId: string }) {
+  const qc = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [openSession, setOpenSession] = useState<AgentSession | null>(null);
+
+  const ws = useQuery({
+    queryKey: qk.workspace(taskId),
+    queryFn: () => workspaceApi.get(taskId),
+    retry: false,
+  });
+  const hasWorkspace = ws.data && (ws.error == null);
+
+  const sessions = useQuery({
+    queryKey: qk.sessions(taskId),
+    queryFn: () => sessionApi.list(taskId),
+    enabled: !!hasWorkspace && ws.data?.status === "ready",
+  });
+
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: qk.workspace(taskId) });
+    void qc.invalidateQueries({ queryKey: qk.sessions(taskId) });
+  };
+
+  const create = useMutation({
+    mutationFn: (input: { provider: string; name: string; template?: string }) =>
+      workspaceApi.create(taskId, input),
+    onSuccess: () => {
+      setShowCreate(false);
+      invalidate();
+    },
+  });
+  const detach = useMutation({
+    mutationFn: () => workspaceApi.detach(taskId),
+    onSuccess: invalidate,
+  });
+  const start = useMutation({
+    mutationFn: (sessionFile?: string) => sessionApi.start(taskId, sessionFile),
+    onSuccess: (res) => {
+      if (!res.launched) window.prompt("Run this command to start a session:", res.command);
+      invalidate();
+    },
+  });
+
+  const w: Workspace | undefined = hasWorkspace ? ws.data : undefined;
+
+  return (
+    <div className="block" data-testid="workspace-section">
+      <h3>Workspace</h3>
+      {!w && (
+        <div className="ws-empty">
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)} data-testid="ws-create">
+            Create tasktree…
+          </button>
+        </div>
+      )}
+      {w && w.status === "provisioning" && (
+        <div className="ws-provisioning" data-testid="ws-provisioning">
+          <span className="spinner" /> Provisioning {w.name}…
+        </div>
+      )}
+      {w && w.status === "error" && (
+        <div className="error-banner">Workspace error: {w.error ?? "unknown"}</div>
+      )}
+      {w && w.status === "ready" && (
+        <div className="ws-ready" data-testid="ws-ready">
+          <div className="ws-meta">
+            <span className="badge badge-source">{w.provider}</span>
+            <code className="ws-path">{w.root_path}</code>
+          </div>
+          <div className="ws-actions">
+            <button className="btn btn-primary" onClick={() => start.mutate(undefined)} data-testid="ws-start">
+              Start session
+            </button>
+            <button className="btn" onClick={() => detach.mutate()}>
+              Detach
+            </button>
+          </div>
+          <h4>Sessions</h4>
+          <SessionList sessions={sessions.data ?? []} onOpen={setOpenSession} />
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateWorkspaceModal
+          defaultName={taskId.slice(0, 8)}
+          onClose={() => setShowCreate(false)}
+          onCreate={(input) => create.mutate(input)}
+        />
+      )}
+      {openSession && (
+        <SessionTranscript
+          session={openSession}
+          onClose={() => setOpenSession(null)}
+          onResume={(file) => {
+            start.mutate(file);
+            setOpenSession(null);
+          }}
+        />
+      )}
+    </div>
   );
 }
 

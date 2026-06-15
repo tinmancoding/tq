@@ -151,3 +151,38 @@ export interface HealthSnapshot {
   aws: { configured: boolean; reachable: boolean | null };
   db_path: string;
 }
+
+// ─────────────────────────────── Workspaces ───────────────────────────
+export type WorkspaceStatus = "provisioning" | "ready" | "error" | "detached";
+export type WorkspaceProviderName = "tasktree" | "local";
+
+export interface Workspace {
+  id: string;
+  task_id: string | null;
+  provider: string;
+  root_path: string;
+  name: string;
+  status: WorkspaceStatus;
+  error: string | null;
+  meta: Record<string, unknown> | null;
+  created_at: string;
+  last_seen_at: string | null;
+}
+
+export type SessionStatus = "seen" | "active" | "ended";
+
+export interface AgentSession {
+  id: string;
+  task_id: string | null;
+  workspace_id: string | null;
+  session_file: string;
+  cwd: string;
+  title: string | null;
+  model: string | null;
+  message_count: number;
+  started_at: string | null;
+  last_activity_at: string | null;
+  status: SessionStatus;
+  file_present: boolean;
+  created_at: string;
+}

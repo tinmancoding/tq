@@ -18,6 +18,7 @@ external constraints, and the few gotchas that waste a session if you don't know
 - [Verifying changes](#verifying-changes)
 - [Testing (3-layer strategy)](#testing-3-layer-strategy)
 - [Adding a migration](#adding-a-migration)
+- [Workspaces & agent sessions](#workspaces--agent-sessions)
 - [External constraints index](#external-constraints-index)
 - [Smoke-data hygiene](#smoke-data-hygiene)
 - [Planned / not yet built](#planned--not-yet-built)
@@ -202,6 +203,43 @@ profile), clean up what you create so the live data stays sane:
 
 There is currently **no intake-delete endpoint** — discard is the only path. Prefer a
 `TQ_CONFIG` dev profile to avoid the cleanup problem entirely.
+
+---
+
+## Workspaces & agent sessions
+
+Every task can own one **workspace** (a tasktree, 1:1) and tq collects every pi
+session that ran in it. The subsystem is a **rebuildable cache** over two durable
+sources of truth — the tasktree registry + `tq.task-id` annotations (or a `.tq.json`
+marker for `local`), and pi's session `.jsonl` files. Everything survives a
+`DROP`-then-`scan`.
+
+- **Providers** (`packages/daemon/src/workspace/`): `tasktree-provider.ts` (shell-out
+  over the `tasktree` binary; auto-disabled if the binary is absent) and
+  `local-provider.ts` (a directory + `.tq.json` marker — the degradation target).
+  The core interface lives in `packages/core/src/workspace/provider.ts`.
+- **Service** (`workspace/service.ts`): provisioning→ready/error lifecycle (clone runs
+  async with SSE), one-way label mirror → `tq.<key>` annotations, `reconcile()` (the
+  `POST /api/workspaces/scan` rebuild), detach (never touches disk), and crash recovery
+  for interrupted `provisioning` rows.
+- **Session index** (`sessions/scanner.ts`): globs pi's session dir by the mangled-cwd
+  prefix, then confirms each header `cwd` lives under a workspace root (defeats
+  `AIBM3-219` vs `AIBM3-2199` collisions). Refresh = scan-on-open (`GET
+  /api/tasks/:id/sessions`) + a 60s periodic tick in `main.ts`. Transcripts are parsed
+  on demand (`sessions/transcript.ts`). Deleting a `.jsonl` tombstones its row.
+- **Launcher** (`sessions/launcher.ts`): `config.session.launcher` is a fixed command
+  template (`{cwd}`/`{cmd}` substituted, spawned detached with `TQ_ACTOR`); empty ⇒ the
+  endpoint returns a copy-paste command string. **No request-supplied command.**
+- **Config**: the `[session]` block (`config.example.toml`). `pi_sessions_dir` defaults
+  to `~/.pi/agent/sessions` — point a dev profile at a throwaway dir to avoid scanning
+  your real sessions.
+- **Provenance**: launched sessions carry `TQ_ACTOR=agent:pi:<id>`; the CLI/web `task`
+  writes then show that actor. Informal context, **not** authz.
+- **Agent operation**: `skills/tq/SKILL.md` teaches a session to self-bootstrap from
+  `tq.task-id` and use the safe `task` verbs.
+
+Post-MVP (not built): a pi **extension** for instant context-injection + session
+registration (Phase 6), and **triage-driven source specs** (Phase 7).
 
 ---
 

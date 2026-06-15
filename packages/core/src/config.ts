@@ -30,6 +30,13 @@ export interface TqConfig {
     token?: string;
     url?: string;
   };
+  session: {
+    launcher: string;
+    default_cmd: string;
+    default_template: string;
+    pi_sessions_dir: string;
+    active_window_sec: number;
+  };
   secrets: Record<string, { env?: string; value?: string }>;
 }
 
@@ -83,6 +90,13 @@ export function defaultConfig(): TqConfig {
     client: {
       actor: "human:laci",
     },
+    session: {
+      launcher: "",
+      default_cmd: "pi",
+      default_template: "",
+      pi_sessions_dir: "~/.pi/agent/sessions",
+      active_window_sec: 900,
+    },
     secrets: {},
   };
 }
@@ -101,6 +115,7 @@ export function loadConfig(configPath?: string): TqConfig {
   // Normalize path-like fields.
   merged.daemon.db_path = expandHome(merged.daemon.db_path);
   merged.daemon.attachments_dir = expandHome(merged.daemon.attachments_dir);
+  merged.session.pi_sessions_dir = expandHome(merged.session.pi_sessions_dir);
   return merged;
 }
 
