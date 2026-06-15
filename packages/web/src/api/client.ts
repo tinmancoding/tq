@@ -8,8 +8,6 @@ import type {
   TaskRef,
   TaskStatus,
   TriageTraceStep,
-  Workspace,
-  AgentSession,
 } from "./types";
 
 // Same-origin in dev (Vite proxies /api → daemon) and in prod (daemon serves
@@ -191,45 +189,3 @@ export const systemApi = {
 };
 
 export const attachmentUrl = (sha256: string) => `/api/attachments/${sha256}`;
-
-// ─────────────────────────────── Workspaces ───────────────────────────
-export const workspaceApi = {
-  get: (taskId: string) =>
-    request<Workspace>("GET", `/tasks/${taskId}/workspace`),
-
-  create: (
-    taskId: string,
-    input: { provider?: string; name?: string; template?: string; vars?: Record<string, string> },
-  ) => request<Workspace>("POST", `/tasks/${taskId}/workspace`, input),
-
-  attach: (taskId: string, input: { path: string; provider?: string }) =>
-    request<Workspace>("POST", `/tasks/${taskId}/workspace/attach`, input),
-
-  detach: (taskId: string) =>
-    request<void>("DELETE", `/tasks/${taskId}/workspace`),
-
-  scan: () => request<{ upserted: number; detached: number }>("POST", "/workspaces/scan"),
-};
-
-// ─────────────────────────────── Sessions ─────────────────────────────
-export const sessionApi = {
-  list: (taskId: string) =>
-    request<{ sessions: AgentSession[] }>("GET", `/tasks/${taskId}/sessions`).then(
-      (r) => r.sessions,
-    ),
-
-  get: (id: string) => request<AgentSession>("GET", `/sessions/${id}`),
-
-  transcript: (id: string) =>
-    request<{ transcript: TriageTraceStep[]; file_present: boolean }>(
-      "GET",
-      `/sessions/${id}/transcript`,
-    ),
-
-  start: (taskId: string, sessionFile?: string) =>
-    request<{ launched: boolean; command: string }>(
-      "POST",
-      `/tasks/${taskId}/sessions/start`,
-      sessionFile ? { session_file: sessionFile } : {},
-    ),
-};

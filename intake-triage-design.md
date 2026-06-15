@@ -3,6 +3,14 @@
 > Working codename: **tq** (triage queue). CLI binary: `task`. Single-user, local-first.
 > Status: design complete, ready to start v1 implementation.
 > Owner: Laci (dil-landrasi).
+>
+> **⚠️ Architecture pivot (2026-06-15):** the *in-daemon orchestration* model below — triage worker
+> pool in core, search in core, workspaces/sessions (§14, §20) — is **superseded by**
+> [`docs/event-driven-architecture.md`](docs/event-driven-architecture.md): a minimal authoritative
+> core (task/intake/log/context + core FTS) with triage and semantic search as **event-driven
+> extensions**, and workspaces/sessions **removed** (to return later as an extension). The data model,
+> capture/triage *semantics*, gate matrix, and CLI/web surface below remain valid; *where the logic
+> lives* and *how components communicate* are redefined by the new doc.
 
 ---
 

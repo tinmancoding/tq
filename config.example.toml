@@ -26,18 +26,5 @@ actor = "human:laci"
 # token = "..."           # optional; overrides actor header
 # url = "http://127.0.0.1:7788"  # optional; defaults to daemon host:port
 
-[session]
-# Terminal launcher command template. {cwd} and {cmd} are substituted; the
-# command is spawned detached with TQ_ACTOR in the environment. Leave empty to
-# get a "print command" fallback the dashboard/CLI shows for copy-paste.
-#   cmux example:   launcher = "cmux new --cwd {cwd} -- {cmd}"
-#   macOS Terminal: launcher = "osascript -e 'tell app \"Terminal\" to do script \"cd {cwd} && {cmd}\"'"
-#   iTerm2:         use an osascript that opens a new tab and runs the command
-launcher = ""
-default_cmd = "pi"                 # what the launcher runs inside the workspace
-default_template = ""              # tasktree template for "Create tasktree"; empty ⇒ blank init
-pi_sessions_dir = "~/.pi/agent/sessions"
-active_window_sec = 900           # session mtime within this window ⇒ shown "active"
-
 [secrets]
 github = { env = "GITHUB_TOKEN" }

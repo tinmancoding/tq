@@ -345,117 +345,6 @@ token
     process.stdout.write(`${res.token}\n`);
   });
 
-// ─────────────────────────────── workspace ────────────────────────────
-const workspace = program.command("workspace").description("task workspaces (tasktrees)");
-workspace
-  .command("create")
-  .description("create a workspace for a task")
-  .argument("<task-id>")
-  .option("--provider <p>", "tasktree|local")
-  .option("--template <t>")
-  .option("--name <n>")
-  .option("--var <k=v>", "template var (repeatable)", collect, [])
-  .option("--json")
-  .action(async (taskId, opts) => {
-    const vars: Record<string, string> = {};
-    for (const v of opts.var as string[]) {
-      const idx = v.indexOf("=");
-      if (idx > 0) vars[v.slice(0, idx)] = v.slice(idx + 1);
-    }
-    const ws = await client().post(`/api/tasks/${taskId}/workspace`, {
-      provider: opts.provider,
-      template: opts.template,
-      name: opts.name,
-      vars: Object.keys(vars).length ? vars : undefined,
-    });
-    opts.json
-      ? emit(ws, true)
-      : process.stdout.write(`provisioning ${shortId((ws as { id: string }).id)}\n`);
-  });
-workspace
-  .command("attach")
-  .description("adopt an existing directory as a task's workspace")
-  .argument("<task-id>")
-  .requiredOption("--path <dir>")
-  .option("--provider <p>")
-  .option("--json")
-  .action(async (taskId, opts) => {
-    const ws = await client().post(`/api/tasks/${taskId}/workspace/attach`, {
-      path: opts.path,
-      provider: opts.provider,
-    });
-    opts.json ? emit(ws, true) : process.stdout.write(`attached\n`);
-  });
-workspace
-  .command("show")
-  .argument("<task-id>")
-  .option("--json")
-  .action(async (taskId, opts) => {
-    const ws = await client().get(`/api/tasks/${taskId}/workspace`);
-    if (opts.json) return emit(ws, true);
-    const w = ws as { id: string; provider: string; root_path: string; status: string };
-    process.stdout.write(`${shortId(w.id)} [${w.status}] ${w.provider}  ${w.root_path}\n`);
-  });
-workspace
-  .command("detach")
-  .argument("<task-id>")
-  .action(async (taskId) => {
-    await client().del(`/api/tasks/${taskId}/workspace`);
-    process.stdout.write("detached\n");
-  });
-workspace
-  .command("scan")
-  .description("rebuild the workspace cache from disk")
-  .option("--json")
-  .action(async (opts) => {
-    const res = await client().post(`/api/workspaces/scan`);
-    opts.json ? emit(res, true) : process.stdout.write(`${JSON.stringify(res)}\n`);
-  });
-
-// ─────────────────────────────── session ──────────────────────────────
-const session = program.command("session").description("agent sessions in a workspace");
-session
-  .command("ls")
-  .argument("<task-id>")
-  .option("--json")
-  .action(async (taskId, opts) => {
-    const res = await client().get<{ sessions: SessionItem[] }>(`/api/tasks/${taskId}/sessions`);
-    if (opts.json) return emit(res.sessions, true);
-    for (const s of res.sessions) {
-      const active = s.status === "active" ? "●" : " ";
-      process.stdout.write(
-        `${active} ${shortId(s.id)}  ${(s.title ?? "(untitled)").slice(0, 50).padEnd(50)} ${String(
-          s.message_count,
-        ).padStart(4)} msg  ${s.model ?? ""}\n`,
-      );
-    }
-    if (res.sessions.length === 0) process.stdout.write("(no sessions)\n");
-  });
-session
-  .command("show")
-  .argument("<session-id>")
-  .option("--json")
-  .action(async (sessionId, opts) => {
-    const s = await client().get(`/api/sessions/${sessionId}`);
-    emit(s, true);
-    void opts;
-  });
-session
-  .command("start")
-  .description("launch a pi session in the task's workspace")
-  .argument("<task-id>")
-  .option("--session <file>", "resume an existing session file")
-  .option("--json")
-  .action(async (taskId, opts) => {
-    const res = await client().post<{ launched: boolean; command: string }>(
-      `/api/tasks/${taskId}/sessions/start`,
-      opts.session ? { session_file: opts.session } : undefined,
-    );
-    if (opts.json) return emit(res, true);
-    if (res.launched) process.stdout.write(`launched\n`);
-    else process.stdout.write(`run this to start a session:\n  ${res.command}\n`);
-  });
-
 // ─────────────────────────────── daemon ───────────────────────────────
 const daemon = program.command("daemon").description("manage the tq daemon");
 daemon.command("start").action(() => daemonStart());
@@ -494,13 +383,6 @@ interface JobItem {
   intake_id: string;
   status: string;
   attempts: number;
-}
-interface SessionItem {
-  id: string;
-  title: string | null;
-  status: string;
-  message_count: number;
-  model: string | null;
 }
 interface SearchResp {
   vector: boolean;

@@ -5,8 +5,6 @@ import { TaskRepo } from "./domain/task.js";
 import { IntakeRepo } from "./domain/intake.js";
 import { JobRepo } from "./domain/job.js";
 import { AttachmentRepo } from "./domain/attachment.js";
-import { WorkspaceRepo } from "./domain/workspace.js";
-import { SessionRepo } from "./domain/session.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -26,8 +24,6 @@ export class Store {
   readonly intake: IntakeRepo;
   readonly jobs: JobRepo;
   readonly attachments: AttachmentRepo;
-  readonly workspaces: WorkspaceRepo;
-  readonly sessions: SessionRepo;
 
   constructor(db: DB, opts: { bus?: EventBus; attachmentsDir?: string } = {}) {
     this.db = db;
@@ -39,8 +35,6 @@ export class Store {
       db,
       opts.attachmentsDir ?? join(tmpdir(), "tq-attachments"),
     );
-    this.workspaces = new WorkspaceRepo(db, this.bus);
-    this.sessions = new SessionRepo(db, this.bus);
   }
 
   static open(opts: StoreOptions, bus?: EventBus): Store {

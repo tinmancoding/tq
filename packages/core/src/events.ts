@@ -16,14 +16,7 @@ export type TqEventName =
   | "job.error"
   | "jobs.summary"
   | "watchlist.polled"
-  | "daemon.status"
-  | "workspace.created"
-  | "workspace.provisioning"
-  | "workspace.ready"
-  | "workspace.error"
-  | "workspace.detached"
-  | "session.discovered"
-  | "session.updated";
+  | "daemon.status";
 
 export interface TqEvent {
   event: TqEventName;

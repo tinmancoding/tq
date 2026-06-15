@@ -8,8 +8,6 @@ export const qk = {
   taskList: (status?: string) => ["task", "list", status ?? "all"] as const,
   board: () => ["task", "board"] as const,
   task: (id: string) => ["task", "detail", id] as const,
-  workspace: (taskId: string) => ["workspace", taskId] as const,
-  sessions: (taskId: string) => ["sessions", taskId] as const,
   transcript: (id: string) => ["transcript", id] as const,
   health: () => ["system", "health"] as const,
   jobs: () => ["jobs"] as const,
@@ -36,15 +34,6 @@ const JOB_EVENTS = [
   "jobs.summary",
   "daemon.status",
 ];
-const WORKSPACE_EVENTS = [
-  "workspace.created",
-  "workspace.provisioning",
-  "workspace.ready",
-  "workspace.error",
-  "workspace.detached",
-];
-const SESSION_EVENTS = ["session.discovered", "session.updated"];
-
 export interface StreamStatus {
   connected: boolean;
   lastEventAt: number | null;
@@ -97,27 +86,6 @@ export function useEventStream(onStatus?: (s: StreamStatus) => void): void {
       });
     }
 
-    for (const name of WORKSPACE_EVENTS) {
-      es.addEventListener(name, (e) => {
-        const taskId = parseTaskId(e);
-        if (taskId) {
-          void qc.invalidateQueries({ queryKey: qk.workspace(taskId) });
-          void qc.invalidateQueries({ queryKey: qk.sessions(taskId) });
-        }
-        invalidate([["workspace"], ["sessions"]]);
-        bumpStatus(true);
-      });
-    }
-
-    for (const name of SESSION_EVENTS) {
-      es.addEventListener(name, (e) => {
-        const taskId = parseTaskId(e);
-        if (taskId) void qc.invalidateQueries({ queryKey: qk.sessions(taskId) });
-        invalidate([["sessions"]]);
-        bumpStatus(true);
-      });
-    }
-
     return () => es.close();
   }, [qc, onStatus]);
 }
@@ -126,15 +94,6 @@ function parseId(e: MessageEvent): string | undefined {
   try {
     const data = JSON.parse(e.data);
     return data?.id ?? data?.intake?.id ?? data?.task?.id ?? data?.task_id;
-  } catch {
-    return undefined;
-  }
-}
-
-function parseTaskId(e: MessageEvent): string | undefined {
-  try {
-    const data = JSON.parse(e.data);
-    return data?.task_id ?? undefined;
   } catch {
     return undefined;
   }
