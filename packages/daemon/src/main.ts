@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   }
 
   const webDist = new URL("../../web/dist", import.meta.url).pathname;
-  const app = buildServer({ store, config, logger: true, embedder, webDist });
+  const app = buildServer({ store, config, logger: true, embedder, webDist, extensions: [] });
   // eslint-disable-next-line no-console
   console.error(
     existsSync(webDist)
@@ -73,6 +73,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     // eslint-disable-next-line no-console
     console.error(`[tq] received ${signal}, shutting down`);
+    app.tqExtensionHost.stop();
     pool?.stop();
     embeddingWorker?.stop();
     await app.close();
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
   await app.listen({ host: config.daemon.host, port: config.daemon.port });
+  app.tqExtensionHost.start();
   // eslint-disable-next-line no-console
   console.error(`[tq] daemon listening on http://${config.daemon.host}:${config.daemon.port}`);
 }

@@ -2,6 +2,9 @@ import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import multipart from "@fastify/multipart";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import type { Store, TqConfig, Embedder } from "@tq/core";
+import { daemonBaseUrl } from "@tq/core";
+import type { ExtensionDefinition } from "@tq/extension-sdk";
+import { createExtensionHost, type ExtensionHost } from "./extensions/host.js";
 import { registerTaskRoutes } from "./routes/tasks.js";
 import { registerIntakeRoutes } from "./routes/intake.js";
 import { registerSearchRoutes } from "./routes/search.js";
@@ -19,10 +22,17 @@ export interface BuildOptions {
   logger?: boolean;
   embedder?: Embedder;
   webDist?: string;
+  /** Extension definitions available to host; enabled per `[extensions.<name>]`. */
+  extensions?: ExtensionDefinition[];
+  /** Override fetch for extensions' CoreClient (tests route to app.inject). */
+  coreFetch?: typeof fetch;
 }
 
+/** The Fastify app, decorated with the extension host (call host.start() after listen). */
+export type TqServer = FastifyInstance & { tqExtensionHost: ExtensionHost };
+
 /** Construct the Fastify app with all routes registered (no listen). */
-export function buildServer(opts: BuildOptions): FastifyInstance {
+export function buildServer(opts: BuildOptions): TqServer {
   const startedAt = opts.startedAt ?? Date.now();
   const app = Fastify({
     logger: opts.logger ?? false,
@@ -60,7 +70,20 @@ export function buildServer(opts: BuildOptions): FastifyInstance {
   registerContextRoutes(app, opts.store);
   registerEventRoutes(app, opts.store, startedAt);
 
+  // Extension host: registers the /api/ext/<name>/* gateway + /api/extensions
+  // discovery now; consuming the event log begins when host.start() is called
+  // (after the server is listening).
+  const host = createExtensionHost({
+    app,
+    store: opts.store,
+    cfg: opts.config,
+    selfBaseUrl: daemonBaseUrl(opts.config),
+    available: opts.extensions ?? [],
+    coreFetch: opts.coreFetch,
+  });
+  app.decorate("tqExtensionHost", host);
+
   if (opts.webDist) registerStatic(app, opts.webDist);
 
-  return app;
+  return app as TqServer;
 }

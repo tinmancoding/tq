@@ -33,3 +33,8 @@ actor = "human:laci"
 
 [secrets]
 github = { env = "GITHUB_TOKEN" }
+
+# Extensions are subscribers that react to the event log and act through the
+# public API. Enable per name; the block is passed to the extension as config.
+# [extensions.triage]
+# enabled = true

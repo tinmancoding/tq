@@ -33,6 +33,7 @@ export interface TqConfig {
     token?: string;
     url?: string;
   };
+  extensions: Record<string, { enabled?: boolean } & Record<string, unknown>>;
   secrets: Record<string, { env?: string; value?: string }>;
 }
 
@@ -89,6 +90,7 @@ export function defaultConfig(): TqConfig {
     client: {
       actor: "human:laci",
     },
+    extensions: {},
     secrets: {},
   };
 }
