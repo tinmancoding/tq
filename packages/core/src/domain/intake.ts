@@ -51,6 +51,7 @@ interface IntakeRow {
   watchlist_id: string | null;
   created_at: string;
   triaged_at: string | null;
+  context: string;
 }
 
 export class IntakeRepo {
@@ -413,6 +414,7 @@ function hydrateIntake(row: IntakeRow): Intake {
     triage: row.triage ? JSON.parse(row.triage) : null,
     triage_trace: row.triage_trace ? JSON.parse(row.triage_trace) : null,
     labels: row.labels ? JSON.parse(row.labels) : null,
+    context: row.context ? JSON.parse(row.context) : {},
   };
 }
 

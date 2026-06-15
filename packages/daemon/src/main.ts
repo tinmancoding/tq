@@ -11,6 +11,7 @@ async function main(): Promise<void> {
     path: config.daemon.db_path,
     embeddingDims: config.embeddings.dims,
     attachmentsDir: config.daemon.attachments_dir,
+    contextSpillBytes: config.context.spill_bytes,
   });
 
   // Crash recovery: requeue any jobs left mid-flight by a previous run.

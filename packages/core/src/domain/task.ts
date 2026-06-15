@@ -51,6 +51,7 @@ interface TaskRow {
   updated_at: string;
   done_at: string | null;
   status_changed_at: string;
+  context: string;
 }
 
 export class TaskRepo {
@@ -391,6 +392,7 @@ export class TaskRepo {
       .all(row.id) as RefRow[];
     return {
       ...row,
+      context: row.context ? JSON.parse(row.context) : {},
       labels,
       refs: refs.map((r) => ({ ...r, meta: r.meta ? JSON.parse(r.meta) : null })),
     };

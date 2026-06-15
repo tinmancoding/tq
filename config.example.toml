@@ -18,6 +18,11 @@ label_vocabulary = ["project", "person", "area", "ticket", "source", "repo"]
 model = "amazon.titan-embed-text-v2:0"
 dims = 1024
 
+[context]
+# Context values larger than this (serialized bytes) spill to the blob store
+# (claim-check) and are stored as a {"$ref":…} reference instead of inline.
+spill_bytes = 65536
+
 [aws]
 region = "us-east-1"
 

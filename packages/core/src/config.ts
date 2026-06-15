@@ -22,6 +22,9 @@ export interface TqConfig {
     model: string;
     dims: number;
   };
+  context: {
+    spill_bytes: number;
+  };
   aws: {
     region: string;
   };
@@ -76,6 +79,9 @@ export function defaultConfig(): TqConfig {
     embeddings: {
       model: "amazon.titan-embed-text-v2:0",
       dims: 1024,
+    },
+    context: {
+      spill_bytes: 65536,
     },
     aws: {
       region: "us-east-1",

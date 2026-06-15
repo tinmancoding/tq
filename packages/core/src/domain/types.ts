@@ -51,6 +51,7 @@ export interface Task {
   updated_at: string;
   done_at: string | null;
   status_changed_at: string;
+  context: Record<string, unknown>;
   labels: Label[];
   refs: TaskRef[];
 }
@@ -92,6 +93,7 @@ export interface Intake {
   watchlist_id: string | null;
   created_at: string;
   triaged_at: string | null;
+  context: Record<string, unknown>;
 }
 
 // ─────────────────────────────── Triage ───────────────────────────────

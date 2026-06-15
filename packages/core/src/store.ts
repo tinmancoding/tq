@@ -6,12 +6,15 @@ import { IntakeRepo } from "./domain/intake.js";
 import { JobRepo } from "./domain/job.js";
 import { AttachmentRepo } from "./domain/attachment.js";
 import { EventStore } from "./domain/event.js";
+import { ContextRepo } from "./domain/context.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 export interface StoreOptions extends OpenDbOptions {
   /** Directory for the content-addressed attachment blob store. */
   attachmentsDir?: string;
+  /** Context value size above which to spill to the blob store (claim-check). */
+  contextSpillBytes?: number;
 }
 
 /**
@@ -26,8 +29,9 @@ export class Store {
   readonly intake: IntakeRepo;
   readonly jobs: JobRepo;
   readonly attachments: AttachmentRepo;
+  readonly context: ContextRepo;
 
-  constructor(db: DB, opts: { bus?: EventBus; attachmentsDir?: string } = {}) {
+  constructor(db: DB, opts: { bus?: EventBus; attachmentsDir?: string; contextSpillBytes?: number } = {}) {
     this.db = db;
     this.bus = opts.bus ?? new EventBus();
     this.events = new EventStore(db);
@@ -38,10 +42,21 @@ export class Store {
       db,
       opts.attachmentsDir ?? join(tmpdir(), "tq-attachments"),
     );
+    this.context = new ContextRepo(
+      db,
+      this.bus,
+      this.events,
+      this.attachments,
+      opts.contextSpillBytes ?? 65536,
+    );
   }
 
   static open(opts: StoreOptions, bus?: EventBus): Store {
-    return new Store(openDb(opts), { bus, attachmentsDir: opts.attachmentsDir });
+    return new Store(openDb(opts), {
+      bus,
+      attachmentsDir: opts.attachmentsDir,
+      contextSpillBytes: opts.contextSpillBytes,
+    });
   }
 
   close(): void {
