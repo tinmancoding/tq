@@ -45,21 +45,12 @@ export {
 } from "./domain/attachment.js";
 
 export {
-  search,
+  ftsSearchTasks,
   type SearchHit,
   type SearchResult,
   type SearchOpts,
-} from "./search/hybrid.js";
+} from "./search/keyword.js";
 export { ftsSearch, indexTask, labelsText, toMatchExpr } from "./search/fts.js";
-export {
-  isVecAvailable,
-  upsertTaskVector,
-  removeTaskVector,
-  vecSearch,
-  type VecHit,
-} from "./search/vector.js";
-export { type Embedder, taskEmbeddingText } from "./search/embeddings.js";
-export { EmbeddingWorker, type EmbeddingWorkerOptions } from "./search/embedding-worker.js";
 
 export {
   loadConfig,

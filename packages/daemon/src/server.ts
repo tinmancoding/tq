@@ -1,7 +1,7 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import multipart from "@fastify/multipart";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import type { Store, TqConfig, Embedder } from "@tq/core";
+import type { Store, TqConfig } from "@tq/core";
 import { daemonBaseUrl } from "@tq/core";
 import type { ExtensionDefinition } from "@tq/extension-sdk";
 import { createExtensionHost, type ExtensionHost } from "./extensions/host.js";
@@ -19,7 +19,6 @@ export interface BuildOptions {
   config: TqConfig;
   startedAt?: number;
   logger?: boolean;
-  embedder?: Embedder;
   webDist?: string;
   /** Extension definitions available to host; enabled per `[extensions.<name>]`. */
   extensions?: ExtensionDefinition[];
@@ -63,7 +62,7 @@ export function buildServer(opts: BuildOptions): TqServer {
   registerSystemRoutes(app, opts.store, opts.config, startedAt);
   registerTaskRoutes(app, opts.store);
   registerIntakeRoutes(app, opts.store);
-  registerSearchRoutes(app, opts.store, opts.embedder);
+  registerSearchRoutes(app, opts.store);
   registerAttachmentRoutes(app, opts.store);
   registerContextRoutes(app, opts.store);
   registerEventRoutes(app, opts.store, startedAt);

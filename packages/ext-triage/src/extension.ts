@@ -98,7 +98,17 @@ async function searchTasks(
   query: string,
   limit: number,
 ): Promise<TriageSearchHit[]> {
-  const res = await core.search(query, { limit });
+  // Prefer the semantic-search extension's hybrid endpoint (cross-extension call
+  // via the public gateway); fall back to core FTS if it isn't hosted.
+  let res: { hits: { task: { id: string; title: string; body: string | null; labels: { key: string; value: string }[]; status: string }; score: number }[] };
+  try {
+    res = await core.request(
+      "GET",
+      `/ext/search-semantic/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    );
+  } catch {
+    res = await core.search(query, { limit });
+  }
   return res.hits.map((h) => ({
     id: h.task.id,
     title: h.task.title,

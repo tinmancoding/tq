@@ -54,9 +54,6 @@ importers:
       smol-toml:
         specifier: ^1.3.1
         version: 1.6.1
-      sqlite-vec:
-        specifier: ^0.1.7-alpha.2
-        version: 0.1.9
       uuidv7:
         specifier: ^1.0.2
         version: 1.2.1
@@ -67,9 +64,6 @@ importers:
 
   packages/daemon:
     dependencies:
-      '@aws-sdk/client-bedrock-runtime':
-        specifier: ^3.730.0
-        version: 3.1048.0
       '@fastify/multipart':
         specifier: ^9.0.3
         version: 9.4.0
@@ -88,6 +82,9 @@ importers:
       '@tq/core':
         specifier: workspace:*
         version: link:../core
+      '@tq/ext-search-semantic':
+        specifier: workspace:*
+        version: link:../ext-search-semantic
       '@tq/ext-triage':
         specifier: workspace:*
         version: link:../ext-triage
@@ -107,6 +104,28 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.22.4
+
+  packages/ext-search-semantic:
+    dependencies:
+      '@aws-sdk/client-bedrock-runtime':
+        specifier: ^3.730.0
+        version: 3.1048.0
+      '@tq/contract':
+        specifier: workspace:*
+        version: link:../contract
+      '@tq/extension-sdk':
+        specifier: workspace:*
+        version: link:../extension-sdk
+      better-sqlite3:
+        specifier: ^11.7.0
+        version: 11.10.0
+      sqlite-vec:
+        specifier: ^0.1.7-alpha.2
+        version: 0.1.9
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.13
 
   packages/ext-triage:
     dependencies:

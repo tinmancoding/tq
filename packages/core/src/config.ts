@@ -19,6 +19,7 @@ export interface TqConfig {
     label_vocabulary: string[];
   };
   embeddings: {
+    provider: string;
     model: string;
     dims: number;
   };
@@ -78,6 +79,7 @@ export function defaultConfig(): TqConfig {
       label_vocabulary: ["project", "person", "area", "ticket", "source", "repo"],
     },
     embeddings: {
+      provider: "titan",
       model: "amazon.titan-embed-text-v2:0",
       dims: 1024,
     },
@@ -90,7 +92,7 @@ export function defaultConfig(): TqConfig {
     client: {
       actor: "human:laci",
     },
-    extensions: { triage: { enabled: true } },
+    extensions: { triage: { enabled: true }, "search-semantic": { enabled: true } },
     secrets: {},
   };
 }

@@ -13,7 +13,6 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.730.0",
     "@fastify/multipart": "^9.0.3",
     "@fastify/static": "^8.0.4",
     "@fastify/type-provider-typebox": "^5.1.0",
@@ -24,7 +23,8 @@
     "smol-toml": "^1.3.1",
     "@tq/contract": "workspace:*",
     "@tq/extension-sdk": "workspace:*",
-    "@tq/ext-triage": "workspace:*"
+    "@tq/ext-triage": "workspace:*",
+    "@tq/ext-search-semantic": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

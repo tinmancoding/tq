@@ -14,7 +14,6 @@ import {
   TASK_STATUSES,
 } from "./types.js";
 import { indexTask, removeFromIndex } from "../search/fts.js";
-import { removeTaskVector } from "../search/vector.js";
 
 export interface CreateTaskInput {
   title: string;
@@ -92,7 +91,6 @@ export class TaskRepo {
       for (const l of input.labels ?? []) this.insertLabel(id, l);
       for (const r of input.refs ?? []) this.insertRef(id, r);
       this.reindex(id);
-      this.enqueueEmbedding(id, ts);
       this.events.append({
         type: "TaskCreated",
         scopeType: "task",
@@ -194,7 +192,6 @@ export class TaskRepo {
       this.db.prepare(`UPDATE task SET ${fields.join(", ")} WHERE id = @id`).run(params);
       if ("title" in input || "body" in input) {
         this.reindex(id);
-        this.enqueueEmbedding(id, params.updated_at as string);
       }
       this.events.append({
         type: "TaskUpdated",
@@ -262,7 +259,6 @@ export class TaskRepo {
           payload: { hard: true },
         });
         removeFromIndex(this.db, id);
-        removeTaskVector(this.db, id);
         this.db.prepare(`DELETE FROM task WHERE id = ?`).run(id);
       });
       tx();
@@ -407,15 +403,6 @@ export class TaskRepo {
       .prepare(`SELECT key, value FROM task_label WHERE task_id = ?`)
       .all(id) as Label[];
     indexTask(this.db, { ...row, labels });
-  }
-
-  private enqueueEmbedding(id: string, ts: string): void {
-    this.db
-      .prepare(
-        `INSERT INTO embedding_queue (task_id, enqueued_at) VALUES (?, ?)
-         ON CONFLICT(task_id) DO UPDATE SET enqueued_at = excluded.enqueued_at`,
-      )
-      .run(id, ts);
   }
 
   private insertLabel(id: string, label: Label): void {
