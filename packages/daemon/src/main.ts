@@ -1,8 +1,12 @@
-import { Store, loadConfig, TriageWorkerPool, EmbeddingWorker, isVecAvailable } from "@tq/core";
+import { Store, loadConfig, EmbeddingWorker, isVecAvailable } from "@tq/core";
 import { existsSync } from "node:fs";
 import { buildServer } from "./server.js";
-import { PiTriageEngine } from "./triage/pi-engine.js";
-import { prepareImageForTriage } from "./triage/resize-image.js";
+import {
+  PiTriageEngine,
+  prepareImageForTriage,
+  triageExtension,
+  type TriageImage,
+} from "@tq/ext-triage";
 import { TitanEmbedder } from "./embeddings/titan.js";
 
 async function main(): Promise<void> {
@@ -34,35 +38,40 @@ async function main(): Promise<void> {
     console.error(`[tq] sqlite-vec unavailable → FTS-only search`);
   }
 
-  // Triage worker pool — started only when the Bedrock model is reachable.
-  const engine = new PiTriageEngine(config);
-  let pool: TriageWorkerPool | null = null;
-  if (engine.probe()) {
-    pool = new TriageWorkerPool(store, engine, {
-      concurrency: config.triage.concurrency,
-      maxAttempts: config.triage.max_attempts,
-      autoCreateConfidence: config.triage.auto_create_confidence,
-      embedder,
-      loadImages: (intakeId) =>
-        Promise.all(
-          store.attachments
-            .forIntake(intakeId)
-            .filter((a) => a.mime.startsWith("image/"))
-            .map((a) => prepareImageForTriage(store.attachments.filePath(a.sha256), a.mime)),
-        ).then((imgs) => imgs.filter((img): img is NonNullable<typeof img> => !!img && img.dataBase64.length > 0)),
-    });
-    pool.start();
-    // eslint-disable-next-line no-console
-    console.error(`[tq] triage pool started (concurrency ${config.triage.concurrency}, model ${config.triage.model})`);
-  } else {
-    // eslint-disable-next-line no-console
-    console.error(
-      `[tq] triage disabled: model ${config.triage.provider}/${config.triage.model} not available (check AWS creds). Intake will queue.`,
-    );
-  }
+  // Triage runs as an event-driven extension (@tq/ext-triage). It's enabled in
+  // config and hosted only when the Bedrock model is reachable; otherwise
+  // intake is captured and waits (retriage re-runs once creds are present).
+  const engine = new PiTriageEngine({
+    provider: config.triage.provider,
+    model: config.triage.model,
+    labelVocabulary: config.triage.label_vocabulary,
+  });
+  const loadImages = (intakeId: string): Promise<TriageImage[]> =>
+    Promise.all(
+      store.attachments
+        .forIntake(intakeId)
+        .filter((a) => a.mime.startsWith("image/"))
+        .map((a) => prepareImageForTriage(store.attachments.filePath(a.sha256), a.mime)),
+    ).then((imgs) => imgs.filter((img): img is NonNullable<typeof img> => !!img && img.dataBase64.length > 0));
+
+  const extensions = engine.probe()
+    ? [
+        triageExtension({
+          engine,
+          autoCreateConfidence: config.triage.auto_create_confidence,
+          loadImages,
+        }),
+      ]
+    : [];
+  // eslint-disable-next-line no-console
+  console.error(
+    engine.probe()
+      ? `[tq] triage extension enabled (model ${config.triage.model})`
+      : `[tq] triage disabled: model ${config.triage.provider}/${config.triage.model} not available (check AWS creds). Intake will queue.`,
+  );
 
   const webDist = new URL("../../web/dist", import.meta.url).pathname;
-  const app = buildServer({ store, config, logger: true, embedder, webDist, extensions: [] });
+  const app = buildServer({ store, config, logger: true, embedder, webDist, extensions });
   // eslint-disable-next-line no-console
   console.error(
     existsSync(webDist)
@@ -74,7 +83,6 @@ async function main(): Promise<void> {
     // eslint-disable-next-line no-console
     console.error(`[tq] received ${signal}, shutting down`);
     app.tqExtensionHost.stop();
-    pool?.stop();
     embeddingWorker?.stop();
     await app.close();
     store.close();

@@ -1,6 +1,6 @@
-import type { Intake, Label, TriageResult, TriageTraceStep } from "../domain/types.js";
+import type { Intake, Label, TriageResult, TriageTraceStep } from "@tq/contract";
 
-export type { TriageTraceStep };
+export type { TriageResult, TriageTraceStep };
 
 export interface TriageImage {
   mediaType: string; // image/png, image/jpeg, …

@@ -73,16 +73,5 @@ export {
 } from "./config.js";
 
 // ── triage ──
-export { decideGate, type GateAction } from "./triage/gate.js";
-export { buildTriagePrompt } from "./triage/prompt.js";
-export { TriageResultSchema, type TriageResultStatic } from "./triage/schema.js";
-export {
-  type TriageEngine,
-  type TriageInput,
-  type TriageImage,
-  type TriageSearchHit,
-  type TriageSearchFn,
-  type TriageTraceStep,
-  type TriageTraceSink,
-} from "./triage/engine.js";
-export { TriageWorkerPool, type WorkerPoolOptions } from "./triage/worker.js";
+// Triage now lives in the @tq/ext-triage extension (event-driven). Core keeps
+// only the TriageResult shape (domain/types) that promote reads from context.

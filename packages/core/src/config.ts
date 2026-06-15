@@ -90,7 +90,7 @@ export function defaultConfig(): TqConfig {
     client: {
       actor: "human:laci",
     },
-    extensions: {},
+    extensions: { triage: { enabled: true } },
     secrets: {},
   };
 }

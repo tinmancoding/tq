@@ -47,6 +47,26 @@ export class ContextRepo {
     return parseBag(row.context);
   }
 
+  /** Resolve a single namespace's value, dereferencing a spilled claim-check
+   *  blob back into its JSON value. */
+  getValue(scope: ContextScope, id: string, namespace: string): unknown {
+    const bag = this.get(scope, id);
+    if (!bag) return null;
+    const v = bag[namespace];
+    if (v && typeof v === "object" && "$ref" in (v as object)) {
+      const sha = (v as ContextRef).$ref.split(":")[2];
+      if (!sha) return null;
+      const b64 = this.blobs.readBase64(sha);
+      if (!b64) return null;
+      try {
+        return JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+      } catch {
+        return null;
+      }
+    }
+    return v ?? null;
+  }
+
   set(
     scope: ContextScope,
     id: string,

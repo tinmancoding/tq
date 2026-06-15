@@ -7,6 +7,7 @@ import type {
   Label,
   MoveTaskInput,
   PromoteIntakeInput,
+  SearchResult,
   SetContextResult,
   Task,
   TaskDetail,
@@ -129,6 +130,7 @@ export function createCoreClient(opts: CoreClientOptions = {}) {
       discard: (id: string, reason: string) =>
         request<unknown>("POST", `/intake/${id}/discard`, { reason }),
       retriage: (id: string) => request<unknown>("POST", `/intake/${id}/retriage`),
+      markTriaged: (id: string) => request<Intake>("POST", `/intake/${id}/triaged`),
       trace: (id: string) =>
         request<{ trace: TriageTraceStep[] }>("GET", `/intake/${id}/trace`),
     },
@@ -141,6 +143,17 @@ export function createCoreClient(opts: CoreClientOptions = {}) {
     system: {
       health: () => request<HealthSnapshot>("GET", "/health"),
     },
+
+    search: (q: string, opts: { status?: string; label?: string; limit?: number } = {}) =>
+      request<SearchResult>(
+        "GET",
+        `/search${qs({
+          q,
+          status: opts.status,
+          label: opts.label,
+          limit: opts.limit !== undefined ? String(opts.limit) : undefined,
+        })}`,
+      ),
 
     events: {
       /** Absolute URL for an EventSource against the durable stream. */

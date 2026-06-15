@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.730.0",
-    "@earendil-works/pi-coding-agent": "^0.79.3",
     "@fastify/multipart": "^9.0.3",
     "@fastify/static": "^8.0.4",
     "@fastify/type-provider-typebox": "^5.1.0",
@@ -22,10 +21,10 @@
     "@tq/core": "workspace:*",
     "fastify": "^5.2.0",
     "pino": "^9.5.0",
-    "sharp": "^0.35.1",
     "smol-toml": "^1.3.1",
     "@tq/contract": "workspace:*",
-    "@tq/extension-sdk": "workspace:*"
+    "@tq/extension-sdk": "workspace:*",
+    "@tq/ext-triage": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

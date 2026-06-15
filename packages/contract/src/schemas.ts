@@ -243,3 +243,14 @@ export const SetContextResponse = Type.Object({
   spilled: Type.Boolean(),
 });
 export type SetContextResult = Static<typeof SetContextResponse>;
+
+// ───────────────────────────── search ─────────────────────────────
+export interface SearchHit {
+  task: Task;
+  score: number;
+  signals?: { fts: boolean; vector: boolean };
+}
+export interface SearchResult {
+  hits: SearchHit[];
+  vector?: boolean;
+}

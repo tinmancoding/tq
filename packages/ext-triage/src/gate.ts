@@ -1,4 +1,4 @@
-import type { TriageResult } from "../domain/types.js";
+import type { TriageResult } from "@tq/contract";
 
 /**
  * The action the gate decides to take after triage. The worker executes it.

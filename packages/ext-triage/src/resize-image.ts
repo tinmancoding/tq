@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
-import type { TriageImage } from "@tq/core";
+import type { TriageImage } from "./engine.js";
 
 /**
  * Bedrock rejects images whose width or height exceeds 8000px, and Anthropic

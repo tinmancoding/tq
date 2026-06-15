@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { prepareImageForTriage } from "../triage/resize-image.js";
+import { prepareImageForTriage } from "../resize-image.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tq-resize-"));
 

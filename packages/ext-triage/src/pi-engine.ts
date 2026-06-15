@@ -9,17 +9,23 @@ import {
   ModelRegistry,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import {
-  buildTriagePrompt,
-  TriageResultSchema,
-  type TqConfig,
-  type TriageEngine,
-  type TriageInput,
-  type TriageResult,
-  type TriageSearchFn,
-  type TriageTraceSink,
-  type TriageTraceStep,
-} from "@tq/core";
+import { buildTriagePrompt } from "./prompt.js";
+import { TriageResultSchema } from "./schema.js";
+import type {
+  TriageEngine,
+  TriageInput,
+  TriageResult,
+  TriageSearchFn,
+  TriageTraceSink,
+  TriageTraceStep,
+} from "./engine.js";
+
+/** What PiTriageEngine needs from config (decoupled from @tq/core's TqConfig). */
+export interface PiTriageEngineConfig {
+  provider: string;
+  model: string;
+  labelVocabulary: string[];
+}
 
 /**
  * Runs a triage pass with a pi SDK session against Bedrock (Claude). Exposes
@@ -30,11 +36,11 @@ export class PiTriageEngine implements TriageEngine {
   private readonly authStorage = AuthStorage.create();
   private readonly modelRegistry = ModelRegistry.create(this.authStorage);
 
-  constructor(private readonly cfg: TqConfig) {}
+  constructor(private readonly cfg: PiTriageEngineConfig) {}
 
   /** True if the configured triage model is resolvable (creds/model present). */
   probe(): boolean {
-    return !!this.modelRegistry.find(this.cfg.triage.provider, this.cfg.triage.model);
+    return !!this.modelRegistry.find(this.cfg.provider, this.cfg.model);
   }
 
   async triage(
@@ -42,11 +48,9 @@ export class PiTriageEngine implements TriageEngine {
     searchTasks: TriageSearchFn,
     onTrace?: TriageTraceSink,
   ): Promise<TriageResult> {
-    const model = this.modelRegistry.find(this.cfg.triage.provider, this.cfg.triage.model);
+    const model = this.modelRegistry.find(this.cfg.provider, this.cfg.model);
     if (!model) {
-      throw new Error(
-        `triage model not found: ${this.cfg.triage.provider}/${this.cfg.triage.model}`,
-      );
+      throw new Error(`triage model not found: ${this.cfg.provider}/${this.cfg.model}`);
     }
 
     let captured: TriageResult | undefined;
@@ -85,7 +89,7 @@ export class PiTriageEngine implements TriageEngine {
     const loader = new DefaultResourceLoader({
       cwd: tmpdir(),
       agentDir: getAgentDir(),
-      systemPromptOverride: () => buildTriagePrompt(this.cfg.triage.label_vocabulary),
+      systemPromptOverride: () => buildTriagePrompt(this.cfg.labelVocabulary),
     });
     await loader.reload();
 

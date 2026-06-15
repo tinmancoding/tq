@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { decideGate } from "../triage/gate.js";
-import type { TriageResult } from "../domain/types.js";
+import { decideGate } from "../gate.js";
+import type { TriageResult } from "@tq/contract";
 
 function base(overrides: Partial<TriageResult> = {}): TriageResult {
   return {
