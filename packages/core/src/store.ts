@@ -5,6 +5,7 @@ import { TaskRepo } from "./domain/task.js";
 import { IntakeRepo } from "./domain/intake.js";
 import { JobRepo } from "./domain/job.js";
 import { AttachmentRepo } from "./domain/attachment.js";
+import { EventStore } from "./domain/event.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -20,6 +21,7 @@ export interface StoreOptions extends OpenDbOptions {
 export class Store {
   readonly db: DB;
   readonly bus: EventBus;
+  readonly events: EventStore;
   readonly tasks: TaskRepo;
   readonly intake: IntakeRepo;
   readonly jobs: JobRepo;
@@ -28,8 +30,9 @@ export class Store {
   constructor(db: DB, opts: { bus?: EventBus; attachmentsDir?: string } = {}) {
     this.db = db;
     this.bus = opts.bus ?? new EventBus();
-    this.tasks = new TaskRepo(db, this.bus);
-    this.intake = new IntakeRepo(db, this.bus, this.tasks);
+    this.events = new EventStore(db);
+    this.tasks = new TaskRepo(db, this.bus, this.events);
+    this.intake = new IntakeRepo(db, this.bus, this.tasks, this.events);
     this.jobs = new JobRepo(db, this.bus);
     this.attachments = new AttachmentRepo(
       db,

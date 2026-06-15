@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { EventBus } from "../events.js";
+import type { EventStore } from "./event.js";
 import { newId, now } from "./ids.js";
 import {
   type Activity,
@@ -56,6 +57,7 @@ export class TaskRepo {
   constructor(
     private readonly db: Database.Database,
     private readonly bus: EventBus,
+    private readonly events: EventStore,
   ) {}
 
   create(input: CreateTaskInput): Task {
@@ -90,6 +92,24 @@ export class TaskRepo {
       for (const r of input.refs ?? []) this.insertRef(id, r);
       this.reindex(id);
       this.enqueueEmbedding(id, ts);
+      this.events.append({
+        type: "TaskCreated",
+        scopeType: "task",
+        scopeId: id,
+        actor: input.created_by ?? DEFAULT_ACTOR,
+        payload: {
+          title: input.title,
+          body: input.body ?? null,
+          status,
+          priority: input.priority ?? null,
+          due_at: input.due_at ?? null,
+          snooze_until: input.snooze_until ?? null,
+          board_rank: input.board_rank ?? null,
+          labels: input.labels ?? [],
+          refs: input.refs ?? [],
+          created_by: input.created_by ?? DEFAULT_ACTOR,
+        },
+      });
     });
     tx();
     const task = this.get(id)!;
@@ -154,6 +174,7 @@ export class TaskRepo {
     if (!existing) return null;
     const fields: string[] = [];
     const params: Record<string, unknown> = { id, updated_at: now() };
+    const changed: Record<string, unknown> = {};
     for (const key of [
       "title",
       "body",
@@ -164,6 +185,7 @@ export class TaskRepo {
       if (key in input && input[key] !== undefined) {
         fields.push(`${key} = @${key}`);
         params[key] = input[key];
+        changed[key] = input[key];
       }
     }
     fields.push(`updated_at = @updated_at`);
@@ -173,6 +195,13 @@ export class TaskRepo {
         this.reindex(id);
         this.enqueueEmbedding(id, params.updated_at as string);
       }
+      this.events.append({
+        type: "TaskUpdated",
+        scopeType: "task",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: { changed },
+      });
     });
     tx();
     const task = this.get(id)!;
@@ -204,6 +233,13 @@ export class TaskRepo {
           meta: { from: existing.status, to: status },
         });
       }
+      this.events.append({
+        type: "TaskMoved",
+        scopeType: "task",
+        scopeId: id,
+        actor,
+        payload: { from: existing.status, to: status, board_rank: boardRank ?? null },
+      });
     });
     tx();
     const task = this.get(id)!;
@@ -217,6 +253,13 @@ export class TaskRepo {
     if (!existing) return false;
     if (hard) {
       const tx = this.db.transaction(() => {
+        this.events.append({
+          type: "TaskDeleted",
+          scopeType: "task",
+          scopeId: id,
+          actor: DEFAULT_ACTOR,
+          payload: { hard: true },
+        });
         removeFromIndex(this.db, id);
         removeTaskVector(this.db, id);
         this.db.prepare(`DELETE FROM task WHERE id = ?`).run(id);
@@ -235,6 +278,13 @@ export class TaskRepo {
     const tx = this.db.transaction(() => {
       this.insertLabel(id, label);
       this.reindex(id);
+      this.events.append({
+        type: "LabelAdded",
+        scopeType: "task",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: { key: label.key, value: label.value },
+      });
     });
     tx();
     const task = this.get(id)!;
@@ -249,6 +299,13 @@ export class TaskRepo {
         .prepare(`DELETE FROM task_label WHERE task_id = ? AND key = ? AND value = ?`)
         .run(id, label.key, label.value);
       this.reindex(id);
+      this.events.append({
+        type: "LabelRemoved",
+        scopeType: "task",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: { key: label.key, value: label.value },
+      });
     });
     tx();
     const task = this.get(id)!;
@@ -259,7 +316,24 @@ export class TaskRepo {
   // ── refs ──
   addRef(id: string, ref: Omit<TaskRef, "id" | "task_id">): TaskRef | null {
     if (!this.get(id)) return null;
-    const refId = this.insertRef(id, ref);
+    let refId = "";
+    const tx = this.db.transaction(() => {
+      refId = this.insertRef(id, ref);
+      this.events.append({
+        type: "RefAdded",
+        scopeType: "task",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: {
+          kind: ref.kind,
+          url: ref.url,
+          external_id: ref.external_id ?? null,
+          title: ref.title ?? null,
+          meta: ref.meta ?? null,
+        },
+      });
+    });
+    tx();
     this.bus.emit("task.updated", this.get(id));
     return this.db.prepare(`SELECT * FROM task_ref WHERE id = ?`).get(refId) as TaskRef;
   }
@@ -270,7 +344,28 @@ export class TaskRepo {
     entry: { entry_type: EntryType; actor: string; body: string; meta?: unknown },
   ): Activity | null {
     if (!this.get(id)) return null;
-    const actId = this.insertActivity(id, entry);
+    let actId = "";
+    const tx = this.db.transaction(() => {
+      actId = this.insertActivity(id, entry);
+      if (entry.entry_type === "worklog") {
+        this.events.append({
+          type: "WorkLogged",
+          scopeType: "task",
+          scopeId: id,
+          actor: entry.actor,
+          payload: { description: entry.body, additionalContext: entry.meta ?? undefined },
+        });
+      } else if (entry.entry_type === "comment") {
+        this.events.append({
+          type: "CommentAdded",
+          scopeType: "task",
+          scopeId: id,
+          actor: entry.actor,
+          payload: { body: entry.body },
+        });
+      }
+    });
+    tx();
     const activity = this.db
       .prepare(`SELECT * FROM activity WHERE id = ?`)
       .get(actId) as ActivityRow;

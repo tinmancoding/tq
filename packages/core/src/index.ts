@@ -2,6 +2,13 @@
 export * from "./domain/types.js";
 export { newId, now } from "./domain/ids.js";
 export { EventBus, type TqEvent, type TqEventName } from "./events.js";
+export {
+  EventStore,
+  type AppendEventInput,
+  type EventRow,
+  type EventScopeType,
+  type ReadEventsOpts,
+} from "./domain/event.js";
 export { Store } from "./store.js";
 export { openDb, type DB, type OpenDbOptions } from "./db/sqlite.js";
 

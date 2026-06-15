@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { EventBus } from "../events.js";
+import type { EventStore } from "./event.js";
 import { newId, now } from "./ids.js";
 import {
   type Intake,
@@ -57,6 +58,7 @@ export class IntakeRepo {
     private readonly db: Database.Database,
     private readonly bus: EventBus,
     private readonly tasks: TaskRepo,
+    private readonly events: EventStore,
   ) {}
 
   /**
@@ -103,6 +105,21 @@ export class IntakeRepo {
         }
       }
       if (!input.deferTriage) this.enqueueJob(createdId, ts);
+      this.events.append({
+        type: "IntakeCaptured",
+        scopeType: "intake",
+        scopeId: createdId,
+        actor: DEFAULT_ACTOR,
+        payload: {
+          source,
+          source_ref: input.source_ref ?? null,
+          event_sig: input.event_sig ?? null,
+          body: input.body ?? null,
+          action_verbs: input.action_verbs ?? null,
+          labels: input.labels ?? null,
+          watchlist_id: input.watchlist_id ?? null,
+        },
+      });
     });
     tx();
 
@@ -156,13 +173,26 @@ export class IntakeRepo {
 
   /** Record a triage result and flip status to triaged. */
   setTriageResult(id: string, result: TriageResult): Intake | null {
-    if (!this.get(id)) return null;
-    this.db
-      .prepare(
-        `UPDATE intake SET triage = ?, triage_error = NULL, status = 'triaged', triaged_at = ?
-         WHERE id = ?`,
-      )
-      .run(JSON.stringify(result), now(), id);
+    const prev = this.get(id);
+    if (!prev) return null;
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE intake SET triage = ?, triage_error = NULL, status = 'triaged', triaged_at = ?
+           WHERE id = ?`,
+        )
+        .run(JSON.stringify(result), now(), id);
+      if (prev.status !== "triaged") {
+        this.events.append({
+          type: "IntakeStatusChanged",
+          scopeType: "intake",
+          scopeId: id,
+          actor: "agent:triage",
+          payload: { from: prev.status, to: "triaged" },
+        });
+      }
+    });
+    tx();
     const intake = this.get(id)!;
     this.bus.emit("intake.triaged", intake);
     return intake;
@@ -216,6 +246,22 @@ export class IntakeRepo {
         meta: { intake_id: id },
       });
       this.markPromoted(id);
+      this.events.append({
+        type: "IntakePromoted",
+        scopeType: "intake",
+        scopeId: id,
+        actor: input.created_by ?? DEFAULT_ACTOR,
+        payload: { task_id: taskId },
+      });
+      if (intake.status !== "promoted") {
+        this.events.append({
+          type: "IntakeStatusChanged",
+          scopeType: "intake",
+          scopeId: id,
+          actor: input.created_by ?? DEFAULT_ACTOR,
+          payload: { from: intake.status, to: "promoted" },
+        });
+      }
     });
     tx();
     const updated = this.get(id)!;
@@ -237,6 +283,22 @@ export class IntakeRepo {
         meta: { intake_id: id, relation },
       });
       this.markPromoted(id);
+      this.events.append({
+        type: "IntakeLinked",
+        scopeType: "intake",
+        scopeId: id,
+        actor,
+        payload: { task_id: taskId, relation },
+      });
+      if (intake.status !== "promoted") {
+        this.events.append({
+          type: "IntakeStatusChanged",
+          scopeType: "intake",
+          scopeId: id,
+          actor,
+          payload: { from: intake.status, to: "promoted" },
+        });
+      }
     });
     tx();
     const updated = this.get(id)!;
@@ -245,10 +307,21 @@ export class IntakeRepo {
   }
 
   discard(id: string, reason: string): Intake | null {
-    if (!this.get(id)) return null;
-    this.db
-      .prepare(`UPDATE intake SET status = 'discarded', discard_reason = ? WHERE id = ?`)
-      .run(reason, id);
+    const prev = this.get(id);
+    if (!prev) return null;
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(`UPDATE intake SET status = 'discarded', discard_reason = ? WHERE id = ?`)
+        .run(reason, id);
+      this.events.append({
+        type: "IntakeStatusChanged",
+        scopeType: "intake",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: { from: prev.status, to: "discarded", reason },
+      });
+    });
+    tx();
     const intake = this.get(id)!;
     this.bus.emit("intake.discarded", intake);
     return intake;
@@ -262,6 +335,15 @@ export class IntakeRepo {
       this.db
         .prepare(`UPDATE intake SET status = 'new', triage_error = NULL, triage_trace = NULL WHERE id = ?`)
         .run(id);
+      if (intake.status !== "new") {
+        this.events.append({
+          type: "IntakeStatusChanged",
+          scopeType: "intake",
+          scopeId: id,
+          actor: DEFAULT_ACTOR,
+          payload: { from: intake.status, to: "new" },
+        });
+      }
       this.enqueueJob(id, now());
     });
     tx();
