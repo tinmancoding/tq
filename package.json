@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "pnpm typecheck",
-    "typecheck": "tsc -p packages/core && tsc -p packages/daemon && tsc -p packages/cli && pnpm --filter @tq/web typecheck",
+    "typecheck": "tsc -p packages/core && tsc -p packages/contract && tsc -p packages/extension-sdk && tsc -p packages/ext-triage && tsc -p packages/ext-search-semantic && tsc -p packages/daemon && tsc -p packages/cli && pnpm --filter @tq/web typecheck",
     "test": "vitest run && pnpm --filter @tq/web test",
     "test:watch": "vitest",
     "dev": "tsx packages/daemon/src/main.ts",

@@ -19,8 +19,12 @@ export interface TqConfig {
     label_vocabulary: string[];
   };
   embeddings: {
+    provider: string;
     model: string;
     dims: number;
+  };
+  context: {
+    spill_bytes: number;
   };
   aws: {
     region: string;
@@ -30,13 +34,7 @@ export interface TqConfig {
     token?: string;
     url?: string;
   };
-  session: {
-    launcher: string;
-    default_cmd: string;
-    default_template: string;
-    pi_sessions_dir: string;
-    active_window_sec: number;
-  };
+  extensions: Record<string, { enabled?: boolean } & Record<string, unknown>>;
   secrets: Record<string, { env?: string; value?: string }>;
 }
 
@@ -81,8 +79,12 @@ export function defaultConfig(): TqConfig {
       label_vocabulary: ["project", "person", "area", "ticket", "source", "repo"],
     },
     embeddings: {
+      provider: "titan",
       model: "amazon.titan-embed-text-v2:0",
       dims: 1024,
+    },
+    context: {
+      spill_bytes: 65536,
     },
     aws: {
       region: "us-east-1",
@@ -90,13 +92,7 @@ export function defaultConfig(): TqConfig {
     client: {
       actor: "human:laci",
     },
-    session: {
-      launcher: "",
-      default_cmd: "pi",
-      default_template: "",
-      pi_sessions_dir: "~/.pi/agent/sessions",
-      active_window_sec: 900,
-    },
+    extensions: { triage: { enabled: true }, "search-semantic": { enabled: true } },
     secrets: {},
   };
 }
@@ -115,7 +111,6 @@ export function loadConfig(configPath?: string): TqConfig {
   // Normalize path-like fields.
   merged.daemon.db_path = expandHome(merged.daemon.db_path);
   merged.daemon.attachments_dir = expandHome(merged.daemon.attachments_dir);
-  merged.session.pi_sessions_dir = expandHome(merged.session.pi_sessions_dir);
   return merged;
 }
 

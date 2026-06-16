@@ -10,20 +10,9 @@ export type TqEventName =
   | "task.updated"
   | "task.moved"
   | "task.activity"
-  | "job.queued"
-  | "job.started"
-  | "job.done"
-  | "job.error"
-  | "jobs.summary"
   | "watchlist.polled"
   | "daemon.status"
-  | "workspace.created"
-  | "workspace.provisioning"
-  | "workspace.ready"
-  | "workspace.error"
-  | "workspace.detached"
-  | "session.discovered"
-  | "session.updated";
+  | "@event";
 
 export interface TqEvent {
   event: TqEventName;

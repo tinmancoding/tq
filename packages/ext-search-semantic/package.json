@@ -1,0 +1,23 @@
+{
+  "name": "@tq/ext-search-semantic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.730.0",
+    "@tq/contract": "workspace:*",
+    "@tq/extension-sdk": "workspace:*",
+    "better-sqlite3": "^11.7.0",
+    "sqlite-vec": "^0.1.7-alpha.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12"
+  }
+}

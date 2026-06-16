@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { EventBus } from "../events.js";
+import type { EventStore } from "./event.js";
 import { newId, now } from "./ids.js";
 import {
   type Intake,
@@ -8,7 +9,6 @@ import {
   type Priority,
   type TaskStatus,
   type TriageResult,
-  type TriageTraceStep,
   DEFAULT_ACTOR,
 } from "./types.js";
 import type { TaskRepo } from "./task.js";
@@ -43,13 +43,11 @@ interface IntakeRow {
   body: string | null;
   action_verbs: string | null;
   discard_reason: string | null;
-  triage: string | null;
-  triage_error: string | null;
-  triage_trace: string | null;
   labels: string | null;
   watchlist_id: string | null;
   created_at: string;
   triaged_at: string | null;
+  context: string;
 }
 
 export class IntakeRepo {
@@ -57,6 +55,7 @@ export class IntakeRepo {
     private readonly db: Database.Database,
     private readonly bus: EventBus,
     private readonly tasks: TaskRepo,
+    private readonly events: EventStore,
   ) {}
 
   /**
@@ -71,7 +70,7 @@ export class IntakeRepo {
     let createdId = id;
     let created = true;
 
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       const res = this.db
         .prepare(
           `INSERT OR IGNORE INTO intake
@@ -102,7 +101,23 @@ export class IntakeRepo {
           return;
         }
       }
-      if (!input.deferTriage) this.enqueueJob(createdId, ts);
+      if (!input.deferTriage) {
+        this.events.append({
+          type: "IntakeCaptured",
+          scopeType: "intake",
+          scopeId: createdId,
+          actor: DEFAULT_ACTOR,
+          payload: {
+            source,
+            source_ref: input.source_ref ?? null,
+            event_sig: input.event_sig ?? null,
+            body: input.body ?? null,
+            action_verbs: input.action_verbs ?? null,
+            labels: input.labels ?? null,
+            watchlist_id: input.watchlist_id ?? null,
+          },
+        });
+      }
     });
     tx();
 
@@ -111,9 +126,33 @@ export class IntakeRepo {
     return { intake, created };
   }
 
-  /** Enqueue a triage job for an intake (used after deferred capture). */
+  /**
+   * Signal that an intake is ready for triage. For the deferred-capture path
+   * (multipart upload) this is called after attachments are linked, so the
+   * triage extension sees the images. Emits `IntakeCaptured` — the event the
+   * triage extension reacts to (there is no in-core job queue anymore).
+   */
   queueTriage(id: string): void {
-    this.enqueueJob(id, now());
+    const intake = this.get(id);
+    if (!intake) return;
+    const tx = this.events.transaction(() => {
+      this.events.append({
+        type: "IntakeCaptured",
+        scopeType: "intake",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: {
+          source: intake.source,
+          source_ref: intake.source_ref,
+          event_sig: intake.event_sig,
+          body: intake.body,
+          action_verbs: intake.action_verbs,
+          labels: intake.labels,
+          watchlist_id: intake.watchlist_id,
+        },
+      });
+    });
+    tx();
   }
 
   get(id: string): Intake | null {
@@ -154,36 +193,34 @@ export class IntakeRepo {
     return rows.map(hydrateIntake);
   }
 
-  /** Record a triage result and flip status to triaged. */
-  setTriageResult(id: string, result: TriageResult): Intake | null {
-    if (!this.get(id)) return null;
-    this.db
-      .prepare(
-        `UPDATE intake SET triage = ?, triage_error = NULL, status = 'triaged', triaged_at = ?
-         WHERE id = ?`,
-      )
-      .run(JSON.stringify(result), now(), id);
-    const intake = this.get(id)!;
-    this.bus.emit("intake.triaged", intake);
-    return intake;
+  /** Mark an intake as triaged (the triage extension's "review" outcome).
+   *  Idempotent: a no-op unless the intake is still `new`. */
+  markTriaged(id: string): Intake | null {
+    const prev = this.get(id);
+    if (!prev) return null;
+    if (prev.status !== "new") return prev;
+    const tx = this.events.transaction(() => {
+      this.db
+        .prepare(`UPDATE intake SET status = 'triaged', triaged_at = ? WHERE id = ?`)
+        .run(now(), id);
+      this.events.append({
+        type: "IntakeStatusChanged",
+        scopeType: "intake",
+        scopeId: id,
+        actor: "agent:triage",
+        payload: { from: prev.status, to: "triaged" },
+      });
+    });
+    tx();
+    return this.get(id)!;
   }
 
-  setTriageError(id: string, error: string): void {
-    this.db.prepare(`UPDATE intake SET triage_error = ? WHERE id = ?`).run(error, id);
-  }
-
-  /** Persist the LLM session transcript for an intake (success or failure). */
-  setTriageTrace(id: string, trace: TriageTraceStep[]): void {
-    this.db
-      .prepare(`UPDATE intake SET triage_trace = ? WHERE id = ?`)
-      .run(JSON.stringify(trace), id);
-  }
 
   /** Promote an intake into a new task, carrying over triage suggestions. */
   promote(id: string, input: PromoteInput = {}): { intake: Intake; taskId: string } | null {
     const intake = this.get(id);
     if (!intake) return null;
-    const triage = intake.triage as TriageResult | null;
+    const triage = this.triageFromContext(id);
 
     const title = input.title ?? triage?.suggested_title ?? firstLine(intake.body) ?? "Untitled";
     const body = input.body ?? triage?.suggested_body ?? intake.body ?? null;
@@ -197,7 +234,7 @@ export class IntakeRepo {
     }));
 
     let taskId = "";
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       const task = this.tasks.create({
         title,
         body,
@@ -216,6 +253,22 @@ export class IntakeRepo {
         meta: { intake_id: id },
       });
       this.markPromoted(id);
+      this.events.append({
+        type: "IntakePromoted",
+        scopeType: "intake",
+        scopeId: id,
+        actor: input.created_by ?? DEFAULT_ACTOR,
+        payload: { task_id: taskId },
+      });
+      if (intake.status !== "promoted") {
+        this.events.append({
+          type: "IntakeStatusChanged",
+          scopeType: "intake",
+          scopeId: id,
+          actor: input.created_by ?? DEFAULT_ACTOR,
+          payload: { from: intake.status, to: "promoted" },
+        });
+      }
     });
     tx();
     const updated = this.get(id)!;
@@ -228,7 +281,7 @@ export class IntakeRepo {
     const intake = this.get(id);
     if (!intake) return null;
     if (!this.tasks.get(taskId)) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.linkInternal(id, taskId, relation);
       this.tasks.addActivity(taskId, {
         entry_type: "system",
@@ -237,6 +290,22 @@ export class IntakeRepo {
         meta: { intake_id: id, relation },
       });
       this.markPromoted(id);
+      this.events.append({
+        type: "IntakeLinked",
+        scopeType: "intake",
+        scopeId: id,
+        actor,
+        payload: { task_id: taskId, relation },
+      });
+      if (intake.status !== "promoted") {
+        this.events.append({
+          type: "IntakeStatusChanged",
+          scopeType: "intake",
+          scopeId: id,
+          actor,
+          payload: { from: intake.status, to: "promoted" },
+        });
+      }
     });
     tx();
     const updated = this.get(id)!;
@@ -245,24 +314,50 @@ export class IntakeRepo {
   }
 
   discard(id: string, reason: string): Intake | null {
-    if (!this.get(id)) return null;
-    this.db
-      .prepare(`UPDATE intake SET status = 'discarded', discard_reason = ? WHERE id = ?`)
-      .run(reason, id);
+    const prev = this.get(id);
+    if (!prev) return null;
+    const tx = this.events.transaction(() => {
+      this.db
+        .prepare(`UPDATE intake SET status = 'discarded', discard_reason = ? WHERE id = ?`)
+        .run(reason, id);
+      this.events.append({
+        type: "IntakeStatusChanged",
+        scopeType: "intake",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: { from: prev.status, to: "discarded", reason },
+      });
+    });
+    tx();
     const intake = this.get(id)!;
     this.bus.emit("intake.discarded", intake);
     return intake;
   }
 
-  /** Requeue a triage job for this intake. */
+  /** Requeue triage for this intake: reset to `new` and re-emit the trigger. */
   retriage(id: string): Intake | null {
     const intake = this.get(id);
     if (!intake) return null;
-    const tx = this.db.transaction(() => {
+    const tx = this.events.transaction(() => {
       this.db
-        .prepare(`UPDATE intake SET status = 'new', triage_error = NULL, triage_trace = NULL WHERE id = ?`)
+        .prepare(`UPDATE intake SET status = 'new' WHERE id = ?`)
         .run(id);
-      this.enqueueJob(id, now());
+      if (intake.status !== "new") {
+        this.events.append({
+          type: "IntakeStatusChanged",
+          scopeType: "intake",
+          scopeId: id,
+          actor: DEFAULT_ACTOR,
+          payload: { from: intake.status, to: "new" },
+        });
+      }
+      this.events.append({
+        type: "IntakeRetriaged",
+        scopeType: "intake",
+        scopeId: id,
+        actor: DEFAULT_ACTOR,
+        payload: {},
+      });
     });
     tx();
     return this.get(id)!;
@@ -280,17 +375,18 @@ export class IntakeRepo {
   forTask(taskId: string): { id: string; relation: string; summary: string | null }[] {
     const rows = this.db
       .prepare(
-        `SELECT it.intake_id AS id, it.relation AS relation, i.triage AS triage
+        `SELECT it.intake_id AS id, it.relation AS relation, i.context AS context
            FROM intake_task it JOIN intake i ON i.id = it.intake_id
           WHERE it.task_id = ?
           ORDER BY it.created_at ASC`,
       )
-      .all(taskId) as { id: string; relation: string; triage: string | null }[];
+      .all(taskId) as { id: string; relation: string; context: string | null }[];
     return rows.map((r) => {
       let summary: string | null = null;
-      if (r.triage) {
+      if (r.context) {
         try {
-          summary = (JSON.parse(r.triage) as { summary?: string }).summary ?? null;
+          const triage = (JSON.parse(r.context) as { triage?: { summary?: string } }).triage;
+          summary = triage?.summary ?? null;
         } catch {
           summary = null;
         }
@@ -299,17 +395,24 @@ export class IntakeRepo {
     });
   }
 
-  // ── helpers ──
-  private enqueueJob(intakeId: string, ts: string): void {
-    this.db
-      .prepare(
-        `INSERT INTO triage_job (id, intake_id, status, created_at, next_run_at)
-         VALUES (?, ?, 'queued', ?, ?)`,
-      )
-      .run(newId(), intakeId, ts, ts);
-    this.bus.emit("job.queued", { intake_id: intakeId });
+  /** Read the triage result from the context bag (written by the triage
+   *  extension). Returns null if absent or spilled to a blob (rare; triage
+   *  results are small). */
+  private triageFromContext(id: string): TriageResult | null {
+    const row = this.db.prepare(`SELECT context FROM intake WHERE id = ?`).get(id) as
+      | { context: string }
+      | undefined;
+    if (!row?.context) return null;
+    try {
+      const v = (JSON.parse(row.context) as Record<string, unknown>).triage;
+      if (!v || (typeof v === "object" && "$ref" in (v as object))) return null;
+      return v as TriageResult;
+    } catch {
+      return null;
+    }
   }
 
+  // ── helpers ──
   private linkInternal(intakeId: string, taskId: string, relation: string): void {
     this.db
       .prepare(
@@ -328,9 +431,8 @@ function hydrateIntake(row: IntakeRow): Intake {
   return {
     ...row,
     action_verbs: row.action_verbs ? JSON.parse(row.action_verbs) : null,
-    triage: row.triage ? JSON.parse(row.triage) : null,
-    triage_trace: row.triage_trace ? JSON.parse(row.triage_trace) : null,
     labels: row.labels ? JSON.parse(row.labels) : null,
+    context: row.context ? JSON.parse(row.context) : {},
   };
 }
 

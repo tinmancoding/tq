@@ -15,10 +15,10 @@ external constraints, and the few gotchas that waste a session if you don't know
 - [Use your own data (read this first)](#use-your-own-data-read-this-first)
 - [Running the stack](#running-the-stack)
 - [Per-component operation](#per-component-operation)
+- [Extensions](#extensions)
 - [Verifying changes](#verifying-changes)
 - [Testing (3-layer strategy)](#testing-3-layer-strategy)
 - [Adding a migration](#adding-a-migration)
-- [Workspaces & agent sessions](#workspaces--agent-sessions)
 - [External constraints index](#external-constraints-index)
 - [Smoke-data hygiene](#smoke-data-hygiene)
 - [Planned / not yet built](#planned--not-yet-built)
@@ -82,7 +82,7 @@ Tear down a dev profile by deleting its `db_path` + `attachments_dir`.
 | `pnpm dev:all` | Daemon (`:7788`) **+** Vite dev server (`:5173`) together, via `scripts/dev-all.mjs`. Vite proxies `/api` (incl. SSE) to the daemon. Use this for web work — HMR covers the web app. |
 | `pnpm dev:web` | Vite dev server only. |
 | `pnpm build:web` | Builds the web app → `packages/web/dist` (what `pnpm dev` serves). |
-| `pnpm typecheck` | `tsc` across core / daemon / cli / web. |
+| `pnpm typecheck` | `tsc` across every package (core, contract, extension-sdk, ext-triage, ext-search-semantic, daemon, cli, web). |
 | `pnpm test` | The CI gate: backend Vitest (node) + web Vitest (jsdom). See [Testing](#testing-3-layer-strategy). |
 
 Ports (don't fight them):
@@ -98,11 +98,20 @@ the daemon as a background agent for daily use.
 
 ## Per-component operation
 
-- **`packages/core`** — domain model: SQLite (`better-sqlite3`), repos, hybrid search
-  (FTS + sqlite-vec), config, event bus, migrations. No process of its own; consumed by
-  daemon and cli.
-- **`packages/daemon`** — Fastify REST API + SSE stream + static serving of the built
-  web app. Runs via `tsx` (no watch). Binds `127.0.0.1:7788`.
+- **`packages/core`** — minimal authoritative domain: SQLite (`better-sqlite3`), repos, the
+  append-only **event log**, the per-entity **context** store, **core FTS** (keyword search,
+  an in-transaction projection), config, migrations. Sole event author. No process of its
+  own; consumed by the daemon and cli.
+- **`packages/contract`** — `@tq/contract`: the public API as TypeBox schemas + `Static<>`-
+  derived types + a typed `CoreClient`. Browser-pure (TypeBox only). The single source of
+  truth shared by daemon validation, web, cli, and the extension SDK.
+- **`packages/extension-sdk`** — `@tq/extension-sdk`: `defineExtension()` + the contract an
+  extension is written against. Depends only on `@tq/contract`.
+- **`packages/ext-triage`** / **`packages/ext-search-semantic`** — the two shipped
+  extensions (AI triage; vector/hybrid search). See [Extensions](#extensions).
+- **`packages/daemon`** — Fastify REST API + durable `/events` (SSE) + the **extension host**
+  + `/api/ext/<name>/*` gateway + static serving of the built web app. Runs via `tsx` (no
+  watch). Binds `127.0.0.1:7788`.
 - **`packages/web`** — React 18 + Vite + TanStack Query. All styling lives in
   `packages/web/src/styles.css`. HMR via the Vite dev server.
 - **`packages/cli`** — the `task` binary; talks to the daemon over REST. In dev:
@@ -110,10 +119,10 @@ the daemon as a background agent for daily use.
 
 **Restart rules:**
 
-- **Daemon runs with no watch.** After editing `packages/core` or `packages/daemon`,
-  you **must restart the daemon by hand** — `tsx` will not pick up the change. Skipping
-  this is the classic time-sink: you "fix" core, see no behaviour change, and debug a
-  non-bug. (This gotcha also lives in `AGENTS.md`.)
+- **Daemon runs with no watch.** After editing `packages/core`, `packages/daemon`, or any
+  **extension/contract/SDK package**, you **must restart the daemon by hand** — `tsx` will
+  not pick up the change. Skipping this is the classic time-sink: you "fix" something, see
+  no behaviour change, and debug a non-bug. (This gotcha also lives in `AGENTS.md`.)
 - **Web changes** are covered by Vite HMR under `pnpm dev:all` — no restart needed.
 
 ---
@@ -163,9 +172,15 @@ daemon start. The mechanics are in `packages/core/src/db/migrate.ts` (read it �
 order, recorded in `_migrations`, each in a transaction, idempotent). `__dirname`
 resolves to `src` because the daemon runs under `tsx`.
 
-To add one: drop in the next lexically-ordered file (current:
-`0001_init`, `0002_triage_trace`, `0003_task_status_changed_at`) and restart the daemon.
-For an add-column-with-backfill, copy the shape of `0002` / `0003`.
+To add one: drop in the next lexically-ordered file (current set runs `0001_init` through
+`0011_drop_embedding_queue`) and restart the daemon. For an add-column-with-backfill, copy
+the shape of `0002` / `0003`; for a data-move-then-drop-column, see `0010` (moves the dead
+`intake.triage*` columns into the context bag via `json_set`, then drops them).
+
+> **Migration immutability.** Past migrations are history — don't edit them. The numbering
+> also has gaps (`0004`/`0005` were the deleted workspaces/sessions migrations); that's
+> expected. Virtual tables (e.g. an old `task_vec`) can't be dropped without the sqlite-vec
+> module loaded, which core no longer loads — leave such inert tables alone.
 
 ---
 
@@ -176,15 +191,17 @@ live outside it. Each is anchored at its code site; this is just the map.
 
 - **Bedrock rejects images with any dimension > 8000px**, and Anthropic downscales past
   ~1568px on the long edge anyway. We cap the long edge at 1568px before sending. →
-  `packages/daemon/src/triage/resize-image.ts` (the rationale is in the file header
+  `packages/ext-triage/src/resize-image.ts` (the rationale is in the file header
   comment). This was the single most expensive debugging detour in the project's
   history; do not remove the resize.
 
 Everything else about triage/trace/status is recoverable from the source and is *not*
 duplicated here:
 
-- Triage transcript persistence + lazy `GET /api/intake/:id/trace` → see
-  `packages/daemon/src/routes/intake.ts` and migration `0002_triage_trace`.
+- Triage runs in `@tq/ext-triage`; its result + transcript are written to the intake's
+  context bag (`context.triage` / `context.triage_trace`) and surfaced by `GET
+  /api/intake/:id/trace` → see `packages/ext-triage/src/extension.ts` and
+  `packages/daemon/src/routes/intake.ts`.
 - `task.status_changed_at` (advances only on real status change; rank-only moves don't
   reset it) → see migration `0003` and the move handler in
   `packages/daemon/src/routes/tasks.ts`.
@@ -206,42 +223,42 @@ There is currently **no intake-delete endpoint** — discard is the only path. P
 
 ---
 
-## Workspaces & agent sessions
+## Extensions
 
-Every task can own one **workspace** (a tasktree, 1:1) and tq collects every pi
-session that ran in it. The subsystem is a **rebuildable cache** over two durable
-sources of truth — the tasktree registry + `tq.task-id` annotations (or a `.tq.json`
-marker for `local`), and pi's session `.jsonl` files. Everything survives a
-`DROP`-then-`scan`.
+Triage and semantic search are **extensions**, not core code. The model (full design:
+`docs/event-driven-architecture.md`):
 
-- **Providers** (`packages/daemon/src/workspace/`): `tasktree-provider.ts` (shell-out
-  over the `tasktree` binary; auto-disabled if the binary is absent) and
-  `local-provider.ts` (a directory + `.tq.json` marker — the degradation target).
-  The core interface lives in `packages/core/src/workspace/provider.ts`.
-- **Service** (`workspace/service.ts`): provisioning→ready/error lifecycle (clone runs
-  async with SSE), one-way label mirror → `tq.<key>` annotations, `reconcile()` (the
-  `POST /api/workspaces/scan` rebuild), detach (never touches disk), and crash recovery
-  for interrupted `provisioning` rows.
-- **Session index** (`sessions/scanner.ts`): globs pi's session dir by the mangled-cwd
-  prefix, then confirms each header `cwd` lives under a workspace root (defeats
-  `AIBM3-219` vs `AIBM3-2199` collisions). Refresh = scan-on-open (`GET
-  /api/tasks/:id/sessions`) + a 60s periodic tick in `main.ts`. Transcripts are parsed
-  on demand (`sessions/transcript.ts`). Deleting a `.jsonl` tombstones its row.
-- **Launcher** (`sessions/launcher.ts`): `config.session.launcher` is a fixed command
-  template (`{cwd}`/`{cmd}` substituted, spawned detached with `TQ_ACTOR`); empty ⇒ the
-  endpoint returns a copy-paste command string. **No request-supplied command.**
-- **Config**: the `[session]` block (`config.example.toml`). `pi_sessions_dir` defaults
-  to `~/.pi/agent/sessions` — point a dev profile at a throwaway dir to avoid scanning
-  your real sessions.
-- **Provenance**: launched sessions carry `TQ_ACTOR=agent:pi:<id>`; the CLI/web `task`
-  writes then show that actor. Informal context, **not** authz.
-- **Agent operation**: `skills/tq/SKILL.md` teaches a session to self-bootstrap from
-  `tq.task-id` and use the safe `task` verbs.
+- An extension is a `defineExtension({ name, setup })` module (`@tq/extension-sdk`). In
+  `setup` it registers **event handlers** (`ctx.on({types,scopeType}, handler)`) and
+  optional **HTTP routes** (`ctx.route(...)`, mounted at `/api/ext/<name>/*`). It acts on
+  core **only** through the injected `ctx.core` (`@tq/contract`'s typed `CoreClient`) and
+  the context store — never importing `@tq/core` or reading its tables.
+- The **host** (`packages/daemon/src/extensions/host.ts`) boots the extensions enabled in
+  `[extensions.<name>]`, gives each a durable subscription (replays the log from its
+  committed cursor, then live-tails), processes events in `seq` order, and dead-letters a
+  persistently-failing handler past the poison (at-least-once + idempotent). Cursor / lag /
+  dead-letters are observable at `GET /api/extensions` and in `/api/health`.
+- **Hosting is in-process today** but the isolation rule (public API only) means an
+  extension is promotable to its own process unchanged. Keep that rule intact.
 
-Post-MVP (not built): a pi **extension** for instant context-injection + session
-registration (Phase 6), and **triage-driven source specs** (Phase 7).
+The two shipped extensions:
 
----
+- **`@tq/ext-triage`** — reacts to `IntakeCaptured` / `IntakeRetriaged`, runs the agentic
+  Claude pass on Bedrock, writes `context.triage`, and applies the gate
+  (auto-create / auto-link / leave-for-review) via the public API. Idempotency guard: skips
+  intakes not in `new`. Engine failure records `context.triage_error` and leaves the intake
+  `new` (manual `task intake retriage` re-runs it) — there is no per-item backoff queue.
+- **`@tq/ext-search-semantic`** — a projection consumer that maintains its **own** sqlite
+  store (separate file + sqlite-vec) by embedding tasks on `TaskCreated`/`TaskUpdated`. Its
+  index is rebuildable from scratch by replaying the task stream from seq 0. Serves
+  `GET /api/ext/search-semantic/search` = RRF(core FTS, its vectors), degrading to FTS-only
+  when the embedder fails. Pluggable embedder via `[embeddings] provider` (`local`
+  HashEmbedder, default/offline; `titan` Bedrock).
+
+**To add an extension:** create `packages/ext-<name>` depending on `@tq/extension-sdk` +
+`@tq/contract`, export a `defineExtension` factory, add it to the daemon's `available` list
+in `packages/daemon/src/main.ts`, enable it in config, and **restart the daemon**.
+
 
 ## Planned / not yet built
 

@@ -1,13 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { Type } from "@sinclair/typebox";
-import type { Store, Embedder } from "@tq/core";
-import { search, TASK_STATUSES } from "@tq/core";
+import type { Store } from "@tq/core";
+import { ftsSearchTasks, TASK_STATUSES } from "@tq/core";
 
-export function registerSearchRoutes(
-  app: FastifyInstance,
-  store: Store,
-  embedder?: Embedder,
-): void {
+/**
+ * Core keyword search (FTS-only). Semantic/hybrid search is served by the
+ * @tq/ext-search-semantic extension at /api/ext/search-semantic/search, which
+ * fuses these results with its own vector index.
+ */
+export function registerSearchRoutes(app: FastifyInstance, store: Store): void {
   app.get(
     "/api/search",
     {
@@ -20,20 +21,14 @@ export function registerSearchRoutes(
         }),
       },
     },
-    async (req) => {
+    (req) => {
       const q = req.query as Record<string, string | undefined>;
       const label = parseLabel(q.label);
-      return search(
-        store.db,
-        store.tasks,
-        q.q ?? "",
-        {
-          status: q.status as never,
-          label: label ?? undefined,
-          limit: q.limit ? Number(q.limit) : undefined,
-        },
-        embedder,
-      );
+      return ftsSearchTasks(store.db, store.tasks, q.q ?? "", {
+        status: q.status as never,
+        label: label ?? undefined,
+        limit: q.limit ? Number(q.limit) : undefined,
+      });
     },
   );
 }

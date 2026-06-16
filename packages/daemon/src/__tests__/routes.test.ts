@@ -115,10 +115,16 @@ describe("intake + search routes", () => {
     const intake = (
       await app.inject({ method: "POST", url: "/api/intake", payload: { text: "trace me" } })
     ).json();
-    store.intake.setTriageTrace(intake.id, [
-      { kind: "thought", text: "hello" },
-      { kind: "tool_call", tool: "search_tasks", args: { query: "x" } },
-    ]);
+    store.context.set(
+      "intake",
+      intake.id,
+      "triage_trace",
+      [
+        { kind: "thought", text: "hello" },
+        { kind: "tool_call", tool: "search_tasks", args: { query: "x" } },
+      ],
+      "agent:triage",
+    );
 
     const trace = await app.inject({ method: "GET", url: `/api/intake/${intake.id}/trace` });
     expect(trace.statusCode).toBe(200);

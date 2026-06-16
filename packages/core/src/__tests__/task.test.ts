@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Store } from "../store.js";
-import { search } from "../search/hybrid.js";
+import { ftsSearchTasks } from "../search/keyword.js";
 
 function freshStore(): Store {
   return Store.open({ path: ":memory:" });
@@ -21,7 +21,7 @@ describe("TaskRepo", () => {
     expect(t.status).toBe("backlog");
     expect(t.labels).toEqual([{ key: "project", value: "aibm" }]);
 
-    const res = await search(store.db, store.tasks, "auth cookie");
+    const res = ftsSearchTasks(store.db, store.tasks, "auth cookie");
     expect(res.hits.length).toBe(1);
     expect(res.hits[0]!.task.id).toBe(t.id);
     expect(res.vector).toBe(false);
@@ -68,9 +68,9 @@ describe("TaskRepo", () => {
 
   it("reindexes when labels change", async () => {
     const t = store.tasks.create({ title: "searchable" });
-    expect((await search(store.db, store.tasks, "frontend")).hits).toHaveLength(0);
+    expect((ftsSearchTasks(store.db, store.tasks, "frontend")).hits).toHaveLength(0);
     store.tasks.addLabel(t.id, { key: "area", value: "frontend" });
-    expect((await search(store.db, store.tasks, "frontend")).hits).toHaveLength(1);
+    expect((ftsSearchTasks(store.db, store.tasks, "frontend")).hits).toHaveLength(1);
   });
 });
 

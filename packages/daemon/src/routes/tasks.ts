@@ -1,29 +1,22 @@
 import type { FastifyInstance } from "fastify";
-import { Type } from "@sinclair/typebox";
 import type { Store } from "@tq/core";
-import { PRIORITIES, TASK_STATUSES } from "@tq/core";
+import { TASK_STATUSES } from "@tq/core";
+import {
+  AddActivityBody,
+  AddRefBody,
+  CreateTaskBody,
+  LabelSchema,
+  ListTasksQuery,
+  MoveTaskBody,
+  UpdateTaskBody,
+} from "@tq/contract";
 import { resolveActor } from "../context.js";
-
-const StatusEnum = Type.Union(TASK_STATUSES.map((s) => Type.Literal(s)));
-const PriorityEnum = Type.Union(PRIORITIES.map((p) => Type.Literal(p)));
-const LabelSchema = Type.Object({ key: Type.String(), value: Type.String() });
 
 export function registerTaskRoutes(app: FastifyInstance, store: Store): void {
   // Create
   app.post(
     "/api/tasks",
-    {
-      schema: {
-        body: Type.Object({
-          title: Type.String({ minLength: 1 }),
-          body: Type.Optional(Type.String()),
-          status: Type.Optional(StatusEnum),
-          priority: Type.Optional(PriorityEnum),
-          due_at: Type.Optional(Type.String()),
-          labels: Type.Optional(Type.Array(LabelSchema)),
-        }),
-      },
-    },
+    { schema: { body: CreateTaskBody } },
     (req, reply) => {
       const b = req.body as Record<string, unknown>;
       const task = store.tasks.create({
@@ -42,17 +35,7 @@ export function registerTaskRoutes(app: FastifyInstance, store: Store): void {
   // List (with optional board grouping)
   app.get(
     "/api/tasks",
-    {
-      schema: {
-        querystring: Type.Object({
-          status: Type.Optional(StatusEnum),
-          label: Type.Optional(Type.String()), // "key:value"
-          group: Type.Optional(Type.Literal("status")),
-          limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
-          offset: Type.Optional(Type.Integer({ minimum: 0 })),
-        }),
-      },
-    },
+    { schema: { querystring: ListTasksQuery } },
     (req) => {
       const q = req.query as Record<string, string | undefined>;
       const label = parseLabel(q.label);
@@ -87,17 +70,7 @@ export function registerTaskRoutes(app: FastifyInstance, store: Store): void {
   // Patch
   app.patch(
     "/api/tasks/:id",
-    {
-      schema: {
-        body: Type.Object({
-          title: Type.Optional(Type.String({ minLength: 1 })),
-          body: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-          priority: Type.Optional(Type.Union([PriorityEnum, Type.Null()])),
-          due_at: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-          snooze_until: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-        }),
-      },
-    },
+    { schema: { body: UpdateTaskBody } },
     (req, reply) => {
       const id = resolveTaskId(store, (req.params as { id: string }).id);
       if (!id) return reply.code(404).send({ error: "task not found" });
@@ -108,14 +81,7 @@ export function registerTaskRoutes(app: FastifyInstance, store: Store): void {
   // Move (status + rank)
   app.post(
     "/api/tasks/:id/move",
-    {
-      schema: {
-        body: Type.Object({
-          status: StatusEnum,
-          board_rank: Type.Optional(Type.String()),
-        }),
-      },
-    },
+    { schema: { body: MoveTaskBody } },
     (req, reply) => {
       const id = resolveTaskId(store, (req.params as { id: string }).id);
       if (!id) return reply.code(404).send({ error: "task not found" });
@@ -154,17 +120,7 @@ export function registerTaskRoutes(app: FastifyInstance, store: Store): void {
   // Refs
   app.post(
     "/api/tasks/:id/refs",
-    {
-      schema: {
-        body: Type.Object({
-          kind: Type.String(),
-          url: Type.String(),
-          external_id: Type.Optional(Type.String()),
-          title: Type.Optional(Type.String()),
-          meta: Type.Optional(Type.Unknown()),
-        }),
-      },
-    },
+    { schema: { body: AddRefBody } },
     (req, reply) => {
       const id = resolveTaskId(store, (req.params as { id: string }).id);
       if (!id) return reply.code(404).send({ error: "task not found" });
@@ -176,14 +132,7 @@ export function registerTaskRoutes(app: FastifyInstance, store: Store): void {
   // Activity
   app.post(
     "/api/tasks/:id/activity",
-    {
-      schema: {
-        body: Type.Object({
-          entry_type: Type.Union([Type.Literal("worklog"), Type.Literal("comment")]),
-          body: Type.String({ minLength: 1 }),
-        }),
-      },
-    },
+    { schema: { body: AddActivityBody } },
     (req, reply) => {
       const id = resolveTaskId(store, (req.params as { id: string }).id);
       if (!id) return reply.code(404).send({ error: "task not found" });

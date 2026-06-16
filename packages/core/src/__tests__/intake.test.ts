@@ -12,11 +12,11 @@ describe("IntakeRepo", () => {
     store = freshStore();
   });
 
-  it("creates intake and enqueues a triage job", () => {
+  it("creates intake and emits IntakeCaptured (the triage trigger)", () => {
     const { intake, created } = store.intake.create({ body: "do a thing" });
     expect(created).toBe(true);
     expect(intake.status).toBe("new");
-    expect(store.jobs.counts().queued).toBe(1);
+    expect(store.events.forScope("intake", intake.id).filter((e) => e.type === "IntakeCaptured")).toHaveLength(1);
   });
 
   it("is idempotent on (source, event_sig) for pollers", () => {
@@ -33,8 +33,8 @@ describe("IntakeRepo", () => {
     expect(first.created).toBe(true);
     expect(second.created).toBe(false);
     expect(second.intake.id).toBe(first.intake.id);
-    // Only one job for the single intake.
-    expect(store.jobs.counts().queued).toBe(1);
+    // Only one IntakeCaptured for the single (deduped) intake.
+    expect(store.events.read({ types: ["IntakeCaptured"] })).toHaveLength(1);
   });
 
   it("promote carries over triage suggestions into a task", () => {
@@ -52,7 +52,7 @@ describe("IntakeRepo", () => {
       actionable_confidence: 0.9,
       task_count_suggestion: 1,
     };
-    store.intake.setTriageResult(intake.id, triage);
+    store.context.set("intake", intake.id, "triage", triage, "agent:triage");
 
     const result = store.intake.promote(intake.id)!;
     const task = store.tasks.get(result.taskId)!;
@@ -84,13 +84,14 @@ describe("IntakeRepo", () => {
     expect(got.discard_reason).toBe("noise");
   });
 
-  it("retriage requeues a job and resets status", () => {
+  it("retriage resets status to new and re-emits the trigger", () => {
     const { intake } = store.intake.create({ body: "x" });
-    store.intake.setTriageResult(intake.id, fakeTriage());
+    store.context.set("intake", intake.id, "triage", fakeTriage(), "agent:triage");
+    store.intake.markTriaged(intake.id);
     expect(store.intake.get(intake.id)!.status).toBe("triaged");
     store.intake.retriage(intake.id);
     expect(store.intake.get(intake.id)!.status).toBe("new");
-    expect(store.jobs.counts().queued).toBe(2);
+    expect(store.events.forScope("intake", intake.id).filter((e) => e.type === "IntakeRetriaged")).toHaveLength(1);
   });
 });
 

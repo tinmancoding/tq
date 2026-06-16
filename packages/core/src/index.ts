@@ -2,6 +2,33 @@
 export * from "./domain/types.js";
 export { newId, now } from "./domain/ids.js";
 export { EventBus, type TqEvent, type TqEventName } from "./events.js";
+export {
+  EventStore,
+  type AppendEventInput,
+  type EventRow,
+  type EventScopeType,
+  type ReadEventsOpts,
+} from "./domain/event.js";
+export {
+  ContextRepo,
+  type ContextScope,
+  type ContextRef,
+  type SetContextResult,
+} from "./domain/context.js";
+export {
+  replay,
+  type ReplayState,
+  type ReplayTask,
+  type ReplayIntake,
+  type ReplayRef,
+} from "./projection/reduce.js";
+export { backfillEvents, type BackfillResult } from "./projection/backfill.js";
+export {
+  SubscriptionRepo,
+  type Subscription,
+  type SubscriptionFilters,
+  type DeadLetter,
+} from "./domain/subscription.js";
 export { Store } from "./store.js";
 export { openDb, type DB, type OpenDbOptions } from "./db/sqlite.js";
 
@@ -11,45 +38,19 @@ export {
   type CreateIntakeInput,
   type PromoteInput,
 } from "./domain/intake.js";
-export { JobRepo, type TriageJob } from "./domain/job.js";
 export {
   AttachmentRepo,
   type AttachmentMeta,
   type IntakeAttachment,
 } from "./domain/attachment.js";
-export {
-  WorkspaceRepo,
-  WorkspaceConflictError,
-  type CreateWorkspaceInput,
-  type WorkspaceRef,
-} from "./domain/workspace.js";
-export {
-  SessionRepo,
-  type UpsertSessionInput,
-} from "./domain/session.js";
-export {
-  type WorkspaceProvider,
-  type WorkspaceRef as ProviderWorkspaceRef,
-  type CreateWorkspaceOpts,
-  type WorkspaceInfo,
-} from "./workspace/provider.js";
 
 export {
-  search,
+  ftsSearchTasks,
   type SearchHit,
   type SearchResult,
   type SearchOpts,
-} from "./search/hybrid.js";
+} from "./search/keyword.js";
 export { ftsSearch, indexTask, labelsText, toMatchExpr } from "./search/fts.js";
-export {
-  isVecAvailable,
-  upsertTaskVector,
-  removeTaskVector,
-  vecSearch,
-  type VecHit,
-} from "./search/vector.js";
-export { type Embedder, taskEmbeddingText } from "./search/embeddings.js";
-export { EmbeddingWorker, type EmbeddingWorkerOptions } from "./search/embedding-worker.js";
 
 export {
   loadConfig,
@@ -62,16 +63,5 @@ export {
 } from "./config.js";
 
 // ── triage ──
-export { decideGate, type GateAction } from "./triage/gate.js";
-export { buildTriagePrompt } from "./triage/prompt.js";
-export { TriageResultSchema, type TriageResultStatic } from "./triage/schema.js";
-export {
-  type TriageEngine,
-  type TriageInput,
-  type TriageImage,
-  type TriageSearchHit,
-  type TriageSearchFn,
-  type TriageTraceStep,
-  type TriageTraceSink,
-} from "./triage/engine.js";
-export { TriageWorkerPool, type WorkerPoolOptions } from "./triage/worker.js";
+// Triage now lives in the @tq/ext-triage extension (event-driven). Core keeps
+// only the TriageResult shape (domain/types) that promote reads from context.

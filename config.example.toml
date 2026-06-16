@@ -15,8 +15,16 @@ auto_create_confidence = 0.8
 label_vocabulary = ["project", "person", "area", "ticket", "source", "repo"]
 
 [embeddings]
+# Embedder used by the @tq/ext-search-semantic extension.
+# provider = "local" → HashEmbedder (offline, zero-dep, no AWS); "titan" → Bedrock.
+provider = "titan"
 model = "amazon.titan-embed-text-v2:0"
 dims = 1024
+
+[context]
+# Context values larger than this (serialized bytes) spill to the blob store
+# (claim-check) and are stored as a {"$ref":…} reference instead of inline.
+spill_bytes = 65536
 
 [aws]
 region = "us-east-1"
@@ -26,18 +34,14 @@ actor = "human:laci"
 # token = "..."           # optional; overrides actor header
 # url = "http://127.0.0.1:7788"  # optional; defaults to daemon host:port
 
-[session]
-# Terminal launcher command template. {cwd} and {cmd} are substituted; the
-# command is spawned detached with TQ_ACTOR in the environment. Leave empty to
-# get a "print command" fallback the dashboard/CLI shows for copy-paste.
-#   cmux example:   launcher = "cmux new --cwd {cwd} -- {cmd}"
-#   macOS Terminal: launcher = "osascript -e 'tell app \"Terminal\" to do script \"cd {cwd} && {cmd}\"'"
-#   iTerm2:         use an osascript that opens a new tab and runs the command
-launcher = ""
-default_cmd = "pi"                 # what the launcher runs inside the workspace
-default_template = ""              # tasktree template for "Create tasktree"; empty ⇒ blank init
-pi_sessions_dir = "~/.pi/agent/sessions"
-active_window_sec = 900           # session mtime within this window ⇒ shown "active"
-
 [secrets]
 github = { env = "GITHUB_TOKEN" }
+
+# Extensions are subscribers that react to the event log and act through the
+# public API (never touching core internals). Enable per name; the whole block
+# is passed to the extension as its config. Both are enabled by default.
+[extensions.triage]
+enabled = true
+
+[extensions.search-semantic]
+enabled = true

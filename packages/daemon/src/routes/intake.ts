@@ -78,7 +78,7 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
             limit: q.limit ? Number(q.limit) : undefined,
             offset: q.offset ? Number(q.offset) : undefined,
           })
-          .map(stripTrace),
+          .map((i) => withTriageContext(i)),
       };
     },
   );
@@ -88,7 +88,7 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
     if (!id) return reply.code(404).send({ error: "intake not found" });
     const intake = store.intake.get(id)!;
     return {
-      ...stripTrace(intake),
+      ...withTriageContext(intake),
       linked_task_ids: store.intake.linkedTaskIds(id),
       attachments: store.attachments.forIntake(id),
     };
@@ -146,20 +146,36 @@ export function registerIntakeRoutes(app: FastifyInstance, store: Store): void {
     return store.intake.retriage(id);
   });
 
+  // Mark an intake triaged (used by the triage extension's "review" outcome).
+  app.post("/api/intake/:id/triaged", (req, reply) => {
+    const id = store.intake.resolveId((req.params as { id: string }).id);
+    if (!id) return reply.code(404).send({ error: "intake not found" });
+    return store.intake.markTriaged(id);
+  });
+
   // Triage LLM session transcript (observability) — fetched lazily by the UI.
+  // Stored in context.triage_trace by the triage extension (may be spilled).
   app.get("/api/intake/:id/trace", (req, reply) => {
     const id = store.intake.resolveId((req.params as { id: string }).id);
     if (!id) return reply.code(404).send({ error: "intake not found" });
-    const intake = store.intake.get(id)!;
-    return { trace: intake.triage_trace ?? [] };
+    const trace = store.context.getValue("intake", id, "triage_trace");
+    return { trace: Array.isArray(trace) ? trace : [] };
   });
 }
 
-/** Drop the (potentially large) triage transcript from list/detail payloads;
- * it's served on demand by GET /api/intake/:id/trace. */
-function stripTrace(intake: Intake): Omit<Intake, "triage_trace"> {
-  const { triage_trace: _omit, ...rest } = intake;
-  return rest;
+/** Surface the triage result/error from the context bag (written by the triage
+ *  extension) as `triage`/`triage_error` wire fields, so existing clients keep
+ *  working now that the legacy columns are gone. */
+function withTriageContext(intake: Intake): Intake & { triage: unknown; triage_error: string | null } {
+  const ctx = (intake.context ?? {}) as Record<string, unknown>;
+  const triage = ctx.triage;
+  const triageError = ctx.triage_error;
+  return {
+    ...intake,
+    triage:
+      triage && !(typeof triage === "object" && "$ref" in (triage as object)) ? triage : null,
+    triage_error: typeof triageError === "string" ? triageError : null,
+  };
 }
 
 function parseJsonField<T>(value: string | undefined): T | undefined {

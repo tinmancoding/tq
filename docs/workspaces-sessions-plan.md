@@ -1,5 +1,12 @@
 # Workspaces & Agent Sessions — Implementation Plan
 
+> **⚠️ REMOVED / DEFERRED (2026-06-15).** Building workspaces & sessions into the core was judged a
+> mistake; the feature is **deleted** from the codebase (see `docs/event-driven-architecture.md` §10).
+> This document is retained **only as a revival blueprint**: when usage warrants, this comes back as
+> **`@tq/ext-workspaces`**, an event-driven extension on the SDK + gateway pattern — **never in core**.
+> The provider abstraction, binding-by-`tq.task-id`, and session-scanner ideas below are still sound;
+> their *hosting* changes (extension, not core daemon).
+
 > Adds a **workspace-anchored, terminal-first agent-session layer** to tq: every task can
 > own a tasktree (1:1), the daemon can create it and launch real pi sessions in it, and tq
 > collects/reads every pi session that ran in that workspace.
