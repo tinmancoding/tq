@@ -181,18 +181,43 @@ program
 // ─────────────────────────────── search ───────────────────────────────
 program
   .command("search")
-  .description("hybrid search over tasks")
+  .description("search tasks (hybrid when a semantic-search extension is enabled, else core FTS)")
   .argument("<query>")
   .option("--status <s>")
   .option("--label <k=v>")
+  .option("--no-vector", "force core FTS-only search (skip the semantic extension)")
   .option("--json")
   .action(async (query, opts) => {
     const qs = new URLSearchParams({ q: query });
     if (opts.status) qs.set("status", opts.status);
     if (opts.label) qs.set("label", normalizeLabel(opts.label));
-    const res = await client().get<SearchResp>(`/api/search?${qs}`);
+    const c = client();
+    // Vector/hybrid search lives in an optional extension post-refactor; core
+    // `/api/search` is always-on FTS only. Prefer the extension endpoint when
+    // it's enabled (discovered via /api/extensions), and fall back to core FTS.
+    let res: SearchResp | undefined;
+    let extensionMissing = false;
+    if (opts.vector !== false) {
+      const path = await semanticSearchPath(c);
+      if (path) {
+        try {
+          res = await c.get<SearchResp>(`${path}?${qs}`);
+        } catch {
+          /* extension errored — fall back to core FTS below */
+        }
+      } else {
+        extensionMissing = true;
+      }
+    }
+    if (!res) res = await c.get<SearchResp>(`/api/search?${qs}`);
     if (opts.json) return emit(res, true);
-    if (!res.vector) process.stdout.write("(fts-only; vector search unavailable)\n");
+    if (!res.vector && opts.vector !== false) {
+      process.stdout.write(
+        extensionMissing
+          ? "(fts-only; no semantic-search extension enabled)\n"
+          : "(fts-only; semantic search degraded)\n",
+      );
+    }
     for (const h of res.hits) {
       printTask(h.task);
     }
@@ -358,6 +383,29 @@ interface ActivityItem {
 interface SearchResp {
   vector: boolean;
   hits: { task: { id: string; title: string; status: string; labels?: { key: string; value: string }[] } }[];
+}
+
+/**
+ * Discover an enabled semantic-search extension's GET `/search` route via the
+ * public extensions registry. Returns the full route path (e.g.
+ * `/api/ext/search-semantic/search`) or null when no such extension is loaded.
+ * Kept name-agnostic so the CLI stays decoupled from any single extension.
+ */
+async function semanticSearchPath(c: Client): Promise<string | null> {
+  try {
+    const { extensions } = await c.get<{
+      extensions: { name: string; routes: { method: string; path: string }[] }[];
+    }>("/api/extensions");
+    for (const ext of extensions ?? []) {
+      const route = (ext.routes ?? []).find(
+        (r) => r.method.toUpperCase() === "GET" && r.path.endsWith("/search"),
+      );
+      if (route) return route.path;
+    }
+  } catch {
+    /* registry unavailable — caller falls back to core FTS */
+  }
+  return null;
 }
 
 function printTaskDetail(task: unknown): void {
