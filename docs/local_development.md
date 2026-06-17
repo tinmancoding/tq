@@ -260,6 +260,50 @@ The two shipped extensions:
 in `packages/daemon/src/main.ts`, enable it in config, and **restart the daemon**.
 
 
+## Enable the Atlassian connector
+
+The `@tq/ext-atlassian` extension gives the triage agent read-only access to
+Jira issues and Confluence pages. It registers only when both credentials are
+present in the daemon's environment.
+
+**Step 1 — export credentials:**
+
+```bash
+export ATLASSIAN_EMAIL="you@company.com"
+export ATLASSIAN_API_TOKEN="<your API token>"  # from https://id.atlassian.com/manage-profile/security/api-tokens
+```
+
+**Step 2 — add the `[atlassian]` stanza to your config** (copy from
+`config.example.toml`; adjust `base_url` and `jira_projects` as needed).
+
+**Step 3 — restart the daemon** (it runs under `tsx` with no watch — a
+hard restart is required for any env or config change):
+
+```bash
+# If using a dev profile:
+TQ_CONFIG=~/.config/tq/dev.toml pnpm dev
+
+# Or, if running via launchd, restart the service:
+task daemon restart   # or: launchctl kickstart -k gui/$(id -u)/com.tq.daemon
+```
+
+**Step 4 — confirm the connector is live:**
+
+```bash
+curl -s http://127.0.0.1:7788/api/ext/atlassian/health
+# Expected: {"ok":true,"connector":"atlassian"}
+```
+
+If the daemon log shows `[tq] atlassian connector disabled (no creds)`, the
+env vars were not visible to the daemon process — check that they are exported
+in the same shell (or included in your launchd plist as `EnvironmentVariables`).
+
+> **Credentials are env-only.** Never put `ATLASSIAN_EMAIL` or
+> `ATLASSIAN_API_TOKEN` in a config file. See `packages/ext-atlassian/README.md`
+> for full setup and the endpoint reference.
+
+---
+
 ## Planned / not yet built
 
 - **Parallel multi-checkout local dev** — being able to run several local checkouts at

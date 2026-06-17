@@ -13,6 +13,8 @@ concurrency = 3
 max_attempts = 3
 auto_create_confidence = 0.8
 label_vocabulary = ["project", "person", "area", "ticket", "source", "repo"]
+# thinking_level = "low"          # Claude extended-thinking: "off" | "low" | "medium" | "high" (default: "low")
+# tool_call_budget = 30            # Max tool calls per triage pass across all tools (default: 30)
 
 [embeddings]
 # Embedder used by the @tq/ext-search-semantic extension.
@@ -45,3 +47,24 @@ enabled = true
 
 [extensions.search-semantic]
 enabled = true
+
+[extensions.atlassian]
+enabled = true
+# ATLASSIAN_EMAIL and ATLASSIAN_API_TOKEN must be set as environment variables.
+# Never put credentials in this file.
+# The connector registers only when both env vars are present; when absent the
+# daemon logs "atlassian connector disabled (no creds)" and triage runs without
+# Atlassian tools.
+
+[atlassian]
+# Atlassian Cloud instance URL — no trailing slash.
+base_url = "https://diligentbrands.atlassian.net"
+# Jira project prefixes for bare-key prefetch filtering (e.g. AIBM3-351 → "AIBM3").
+# Set to [] to disable the filter (fetch-and-drop 404s instead).
+jira_projects = ["AIBM3", "AIBM"]
+# Optional overrides (defaults shown):
+# request_timeout_ms = 15000      # per-request HTTP timeout (ms)
+# pass_timeout_ms = 180000        # wall-clock bound for an entire triage pass (ms)
+# prefetch_max = 5                # max refs auto-dereferenced before the agent runs
+# body_markdown_max_chars = 8000  # truncate rendered body to this many characters
+# attachment_max_bytes = 26214400 # 25 MiB — max attachment download size
