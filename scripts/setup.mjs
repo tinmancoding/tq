@@ -2,10 +2,11 @@
 // scripts/setup.mjs — idempotent install of tq as a launchd user agent.
 // Node built-ins only; no npm dependencies.
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, chmodSync, copyFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, chmodSync, copyFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,22 @@ if (!pathDirs.includes(localBin)) {
 // ---------------------------------------------------------------------------
 const nodeExec = process.execPath; // path to the node binary running this script
 const daemonMain = join(repoRoot, "packages", "daemon", "src", "main.ts");
+// launchd must run `node <tsx-cli.mjs> main.ts`. The node_modules/.bin/tsx entry
+// is a POSIX shell shim (not JS), so it cannot be passed to node directly.
+// Resolve tsx's real CLI from its package.json `bin` (robust to pnpm symlinks).
+function resolveTsxCli() {
+  try {
+    const require = createRequire(join(repoRoot, "package.json"));
+    const pkgJsonPath = require.resolve("tsx/package.json");
+    const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
+    const binRel = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.tsx;
+    if (binRel) return join(dirname(pkgJsonPath), binRel);
+  } catch {
+    // fall through to the conventional path
+  }
+  return join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs");
+}
+const tsxCli = resolveTsxCli();
 const stdoutLog = join(dataRoot, "run", "daemon.log");
 const stderrLog = join(dataRoot, "run", "daemon.err");
 
@@ -146,7 +163,7 @@ const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
   <key>ProgramArguments</key>
   <array>
     <string>${nodeExec}</string>
-    <string>${tsxBin}</string>
+    <string>${tsxCli}</string>
     <string>${daemonMain}</string>
   </array>
   <key>WorkingDirectory</key><string>${repoRoot}</string>
