@@ -17,6 +17,17 @@ export interface TqConfig {
     max_attempts: number;
     auto_create_confidence: number;
     label_vocabulary: string[];
+    thinking_level: string;
+    tool_call_budget: number;
+  };
+  atlassian: {
+    base_url: string;
+    jira_projects: string[];
+    request_timeout_ms: number;
+    pass_timeout_ms: number;
+    prefetch_max: number;
+    body_markdown_max_chars: number;
+    attachment_max_bytes: number;
   };
   embeddings: {
     provider: string;
@@ -77,6 +88,17 @@ export function defaultConfig(): TqConfig {
       max_attempts: 3,
       auto_create_confidence: 0.8,
       label_vocabulary: ["project", "person", "area", "ticket", "source", "repo"],
+      thinking_level: "low",
+      tool_call_budget: 30,
+    },
+    atlassian: {
+      base_url: "https://diligentbrands.atlassian.net",
+      jira_projects: [] as string[],
+      request_timeout_ms: 15000,
+      pass_timeout_ms: 180000,
+      prefetch_max: 5,
+      body_markdown_max_chars: 8000,
+      attachment_max_bytes: 26214400,
     },
     embeddings: {
       provider: "titan",
@@ -92,7 +114,11 @@ export function defaultConfig(): TqConfig {
     client: {
       actor: "human:laci",
     },
-    extensions: { triage: { enabled: true }, "search-semantic": { enabled: true } },
+    extensions: {
+      triage: { enabled: true },
+      "search-semantic": { enabled: true },
+      atlassian: { enabled: true },
+    },
     secrets: {},
   };
 }

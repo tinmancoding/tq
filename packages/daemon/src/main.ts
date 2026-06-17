@@ -14,6 +14,7 @@ import {
   searchSemanticExtension,
   type Embedder,
 } from "@tq/ext-search-semantic";
+import { AtlassianClient, atlassianExtension } from "@tq/ext-atlassian";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -48,6 +49,11 @@ async function main(): Promise<void> {
     provider: config.triage.provider,
     model: config.triage.model,
     labelVocabulary: config.triage.label_vocabulary,
+    thinkingLevel: config.triage.thinking_level,
+    toolCallBudget: config.triage.tool_call_budget,
+    passTimeoutMs: config.atlassian.pass_timeout_ms,
+    jiraProjects: config.atlassian.jira_projects,
+    prefetchMax: config.atlassian.prefetch_max,
   });
   const loadImages = (intakeId: string): Promise<TriageImage[]> =>
     Promise.all(
@@ -63,6 +69,7 @@ async function main(): Promise<void> {
           engine,
           autoCreateConfidence: config.triage.auto_create_confidence,
           loadImages,
+          passTimeoutMs: config.atlassian.pass_timeout_ms,
         }),
         searchExt,
       ]
@@ -73,6 +80,32 @@ async function main(): Promise<void> {
       ? `[tq] triage extension enabled (model ${config.triage.model})`
       : `[tq] triage disabled: model ${config.triage.provider}/${config.triage.model} not available (check AWS creds). Intake will queue.`,
   );
+
+  // Atlassian connector registers only when both env creds are present (token-gate, design §4).
+  const atlassianEmail = process.env["ATLASSIAN_EMAIL"];
+  const atlassianToken = process.env["ATLASSIAN_API_TOKEN"];
+  if (atlassianEmail && atlassianToken) {
+    const atlassianClient = new AtlassianClient({
+      baseUrl: config.atlassian.base_url,
+      email: atlassianEmail,
+      token: atlassianToken,
+      timeoutMs: config.atlassian.request_timeout_ms,
+    });
+    const atlassianExt = atlassianExtension({
+      client: atlassianClient,
+      config: {
+        baseUrl: config.atlassian.base_url,
+        bodyMarkdownMaxChars: config.atlassian.body_markdown_max_chars,
+        attachmentMaxBytes: config.atlassian.attachment_max_bytes,
+      },
+    });
+    extensions.push(atlassianExt);
+    // eslint-disable-next-line no-console
+    console.error(`[tq] atlassian connector enabled (base_url: ${config.atlassian.base_url})`);
+  } else {
+    // eslint-disable-next-line no-console
+    console.error(`[tq] atlassian connector disabled (no creds)`);
+  }
 
   const webDist = new URL("../../web/dist", import.meta.url).pathname;
   const app = buildServer({ store, config, logger: true, webDist, extensions });

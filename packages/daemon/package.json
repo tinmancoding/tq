@@ -24,7 +24,8 @@
     "@tq/contract": "workspace:*",
     "@tq/extension-sdk": "workspace:*",
     "@tq/ext-triage": "workspace:*",
-    "@tq/ext-search-semantic": "workspace:*"
+    "@tq/ext-search-semantic": "workspace:*",
+    "@tq/ext-atlassian": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2"
