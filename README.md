@@ -35,29 +35,37 @@ packages/
 ## Quick start
 
 ```bash
-pnpm install           # builds the better-sqlite3 native addon
-cp config.example.toml ~/.config/tq/config.toml   # optional; sane defaults otherwise
-
-# run the daemon (foreground)
-pnpm dev
-# …or background it
-pnpm --filter @tq/cli start daemon start
+git clone git@github.com:tinmancoding/tq.git ~/.tq
+cd ~/.tq
+pnpm install
+make install   # builds web, seeds config/, installs task shim + launchd agent
 ```
 
-Then drive it with the CLI (run via tsx during development):
+The `task` CLI shim is installed to `~/.local/bin/task`. Make sure that's on your PATH:
 
 ```bash
-alias task="pnpm --filter @tq/cli start --"
+export PATH="$HOME/.local/bin:$PATH"  # add to your shell profile
+```
 
-task add "Fix auth cookie bug" --label project:aibm --priority high
-task ls
-task move <id> doing
-task log <id> "pushed changes, CI green"
-task search "auth cookie"
+Add credentials to `~/.tq/config/tq.env` (created automatically; already `chmod 0600`):
 
-task intake add --text "Review PR 123 for the auth fix"
-task intake ls
-task intake promote <id> --title "Review PR 123"
+```bash
+# ~/.tq/config/tq.env
+ATLASSIAN_EMAIL=you@company.com
+ATLASSIAN_API_TOKEN=your_atlassian_api_token
+AWS_PROFILE=your_aws_profile
+```
+
+After `git pull`, rebuild and restart:
+
+```bash
+cd ~/.tq && git pull && make update
+```
+
+To uninstall the launchd agent and CLI shim (data/config preserved):
+
+```bash
+make uninstall
 ```
 
 ## How it works
@@ -89,32 +97,29 @@ task intake promote <id> --title "Review PR 123"
   modals — live over the event stream.
 - **Attribution**: `X-TQ-Actor` / `X-TQ-Token`; localhost is the boundary.
 
-## Web dashboard
+## Using the CLI
 
 ```bash
-# dev: daemon + Vite (hot reload) together
-pnpm dev:all                 # daemon :7788 + web :5173 (Vite proxies /api)
+task add "Fix auth cookie bug" --label project:aibm --priority high
+task ls
+task move <id> doing
+task log <id> "pushed changes, CI green"
+task search "auth cookie"
 
-# production: build once, daemon serves it at /
-pnpm build:web               # → packages/web/dist
-pnpm dev                     # daemon serves the dashboard at http://127.0.0.1:7788/
+task intake add --text "Review PR 123 for the auth fix"
+task intake ls
+task intake promote <id> --title "Review PR 123"
 ```
 
 ## Develop
 
 ```bash
-pnpm test          # backend (vitest, node) + web (vitest, jsdom + RTL + MSW)
-pnpm typecheck     # tsc --noEmit across all packages incl. web
+pnpm install           # installs deps + builds the better-sqlite3 native addon
+pnpm dev               # daemon (foreground, port 7799, data at <checkout>/data)
+pnpm dev:all           # daemon :7799 + Vite dev server :5173
+pnpm test              # backend + web tests
+pnpm typecheck         # tsc across all packages
 ```
 
-> **Working on tq (esp. with an agent)?** Read [`AGENTS.md`](./AGENTS.md) and
-> [`docs/local_development.md`](./docs/local_development.md) for how to operate, verify,
-> test, and migrate each component — and how to run against a throwaway DB instead of
-> your real one (there's no dev/prod separation yet, so the default config mutates live
-> data).
-
-## Deploy as a launchd agent
-
-```bash
-./scripts/install-launchd.sh   # writes ~/Library/LaunchAgents/dev.tq.daemon.plist
-```
+Dev checkouts default to `<checkout>/data/` (sandbox) and port **7799**, so they never
+touch the production data at `~/.tq`. See `docs/local_development.md`.

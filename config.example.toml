@@ -1,10 +1,10 @@
-# tq config — copy to ~/.config/tq/config.toml and edit.
+# tq config — copy to <checkout>/config/config.toml (or $TQ_CONFIG path) and edit.
+# Data paths (db_path, attachments_dir) are derived automatically from the
+# TQ_DATA env var or <checkout>/data/. Re-add those keys here only to override.
 
 [daemon]
 host = "127.0.0.1"
 port = 7788
-db_path = "~/.local/share/tq/tq.db"
-attachments_dir = "~/.local/share/tq/attachments"
 
 [triage]
 provider = "amazon-bedrock"

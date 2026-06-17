@@ -2,8 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, openSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { homedir } from "node:os";
-import { daemonBaseUrl, loadConfig } from "@tq/core";
+import { daemonBaseUrl, dataDir, loadConfig } from "@tq/core";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
@@ -11,7 +10,7 @@ const daemonMain = join(repoRoot, "packages/daemon/src/main.ts");
 const tsxBin = join(repoRoot, "node_modules/.bin/tsx");
 
 function runtimeDir(): string {
-  const dir = join(homedir(), ".local", "share", "tq");
+  const dir = join(dataDir(), "run");
   mkdirSync(dir, { recursive: true });
   return dir;
 }

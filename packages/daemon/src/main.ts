@@ -1,5 +1,5 @@
-import { Store, loadConfig } from "@tq/core";
-import { existsSync } from "node:fs";
+import { Store, configDir, loadConfig } from "@tq/core";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { buildServer } from "./server.js";
 import {
@@ -17,6 +17,33 @@ import {
 import { AtlassianClient, atlassianExtension } from "@tq/ext-atlassian";
 
 async function main(): Promise<void> {
+  // Load secrets from <configDir>/tq.env before config is read so creds are
+  // available for triage / atlassian connectors. launchd agents don't inherit
+  // the interactive shell env, so this is the primary secrets delivery path.
+  // Real process.env values always win over the file (don't overwrite existing).
+  const envFile = join(configDir(), "tq.env");
+  if (existsSync(envFile)) {
+    const lines = readFileSync(envFile, "utf8").split("\n");
+    for (const raw of lines) {
+      const line = raw.trim();
+      // Skip blank lines and comments
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq < 1) continue;
+      const key = line.slice(0, eq).trim();
+      let val = line.slice(eq + 1).trim();
+      // Strip optional surrounding single or double quotes
+      if ((val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      // Real env wins — only set if not already defined
+      if (!(key in process.env)) {
+        process.env[key] = val;
+      }
+    }
+  }
+
   const config = loadConfig();
   const store = Store.open({
     path: config.daemon.db_path,

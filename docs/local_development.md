@@ -27,49 +27,35 @@ external constraints, and the few gotchas that waste a session if you don't know
 
 ## Use your own data (read this first)
 
-`tq` has **no dev/prod separation yet**. By default the daemon reads its DB and
-attachments from the paths in config, which resolve to the **real, in-use instance**
-(`~/.local/share/tq/tq.db`). Running `pnpm dev`/`pnpm dev:all` with the default config
-mutates that live data.
+`tq` has **first-class dev/prod isolation**: the repo checkout is the discriminator.
 
-**Default rule for any agent / experiment: run against your *own* throwaway config,
-not the real instance — unless you've been explicitly asked to target the real one.**
+- **A dev checkout** (any directory that is *not* `~/.tq`) defaults to
+  `<checkout>/data/` for its DB and attachments, and binds on port **7799**.
+  No config file is needed — `pnpm dev` is already sandboxed out of the box.
+- **The production install** lives at `~/.tq` (cloned there by `make install`).
+  It uses the same `<checkout>/data/` defaults, with port **7788** set via
+  `~/.tq/config/config.toml`.
 
-Config is selected via the `TQ_CONFIG` env var (resolution order: explicit arg →
-`$TQ_CONFIG` → `~/.config/tq/config.toml`). Point it at a disposable profile with its
-own DB, attachments dir, and port:
-
-```toml
-# ~/.config/tq/dev.toml
-[daemon]
-host = "127.0.0.1"
-port = 7799                                  # different port → can coexist with the real daemon
-db_path = "~/.local/share/tq/dev.db"
-attachments_dir = "~/.local/share/tq/dev-attachments"
-```
+`TQ_CONFIG` and `TQ_DATA` are explicit overrides and still work as before for
+advanced multi-profile use. For everyday dev work you need neither.
 
 ```bash
-export TQ_CONFIG=~/.config/tq/dev.toml
-pnpm dev:all                                 # now hits dev.db, not the real tq.db
+# Dev: just run from your checkout — isolated sandbox, zero config.
+pnpm dev:all           # daemon on :7799, data at <checkout>/data/, web on :5173
 ```
 
-The CLI daemon controls (`task daemon start/stop/status/logs`) are profile-aware: their
-pidfile/log are namespaced by the daemon port (`daemon-<port>.pid`), and the spawned
-daemon inherits `TQ_CONFIG`, so a dev profile coexists with the real daemon without
-colliding.
-
-The web dev server proxies to the daemon at `http://127.0.0.1:7788` by default; if you
-moved the daemon port, set `TQ_DAEMON_URL` so Vite proxies to the right place:
+For a second simultaneous profile or an alternative data directory:
 
 ```bash
-TQ_DAEMON_URL=http://127.0.0.1:7799 pnpm dev:all
+export TQ_DATA=~/.local/share/tq-experiment
+pnpm dev
+# — or use a full config override:
+export TQ_CONFIG=~/.config/tq/experiment.toml
+pnpm dev
 ```
 
-Tear down a dev profile by deleting its `db_path` + `attachments_dir`.
-
-> The migration to first-class isolation (multiple checkouts at once) is planned — see
-> [Planned / not yet built](#planned--not-yet-built). Until then, `TQ_CONFIG` is the
-> stopgap. Don't build an ad-hoc isolation layer.
+The CLI daemon controls remain profile-aware: pidfile/log are namespaced by port
+(`daemon-<port>.pid`), and spawned daemons inherit `TQ_CONFIG`.
 
 ---
 
@@ -78,8 +64,8 @@ Tear down a dev profile by deleting its `db_path` + `attachments_dir`.
 | Command | What it does |
 | --- | --- |
 | `pnpm install` | Installs deps; builds the `better-sqlite3` native addon. |
-| `pnpm dev` | Daemon only (foreground, `tsx`, no watch). Serves the **built** web app at `/` if `packages/web/dist` exists. Binds `127.0.0.1:7788`. |
-| `pnpm dev:all` | Daemon (`:7788`) **+** Vite dev server (`:5173`) together, via `scripts/dev-all.mjs`. Vite proxies `/api` (incl. SSE) to the daemon. Use this for web work — HMR covers the web app. |
+| `pnpm dev` | Daemon only (foreground, `tsx`, no watch). Serves the **built** web app at `/` if `packages/web/dist` exists. Binds `127.0.0.1:7799` (dev default). |
+| `pnpm dev:all` | Daemon (`:7799`) **+** Vite dev server (`:5173`) together, via `scripts/dev-all.mjs`. Vite proxies `/api` (incl. SSE) to the daemon. Use this for web work — HMR covers the web app. |
 | `pnpm dev:web` | Vite dev server only. |
 | `pnpm build:web` | Builds the web app → `packages/web/dist` (what `pnpm dev` serves). |
 | `pnpm typecheck` | `tsc` across every package (core, contract, extension-sdk, ext-triage, ext-search-semantic, daemon, cli, web). |
@@ -89,10 +75,11 @@ Ports (don't fight them):
 
 - **Vite dev server: IPv6 `localhost:5173`** — open `http://localhost:5173`, *not*
   `http://127.0.0.1:5173`. Vite binds the IPv6 loopback by default.
-- **Daemon: `127.0.0.1:7788`** (IPv4). The CLI and the Vite proxy both target it.
+- **Dev daemon: `127.0.0.1:7799`** (IPv4) — default for any non-`~/.tq` checkout.
+- **Prod daemon: `127.0.0.1:7788`** (IPv4) — set via `~/.tq/config/config.toml`.
+  The CLI and the Vite proxy (when `TQ_DAEMON_URL` is set) target the configured port.
 
-`README.md` also documents a launchd install (`scripts/install-launchd.sh`) for running
-the daemon as a background agent for daily use.
+`README.md` documents install (`make install`), update (`make update`), and uninstall (`make uninstall`).
 
 ---
 
@@ -111,7 +98,7 @@ the daemon as a background agent for daily use.
   extensions (AI triage; vector/hybrid search). See [Extensions](#extensions).
 - **`packages/daemon`** — Fastify REST API + durable `/events` (SSE) + the **extension host**
   + `/api/ext/<name>/*` gateway + static serving of the built web app. Runs via `tsx` (no
-  watch). Binds `127.0.0.1:7788`.
+  watch). Binds `127.0.0.1:7799` by default (dev); `127.0.0.1:7788` for prod via config.
 - **`packages/web`** — React 18 + Vite + TanStack Query. All styling lives in
   `packages/web/src/styles.css`. HMR via the Vite dev server.
 - **`packages/cli`** — the `task` binary; talks to the daemon over REST. In dev:
@@ -284,7 +271,7 @@ hard restart is required for any env or config change):
 TQ_CONFIG=~/.config/tq/dev.toml pnpm dev
 
 # Or, if running via launchd, restart the service:
-task daemon restart   # or: launchctl kickstart -k gui/$(id -u)/com.tq.daemon
+task daemon restart   # or: launchctl kickstart -k gui/$(id -u)/tq.daemon
 ```
 
 **Step 4 — confirm the connector is live:**
@@ -306,8 +293,5 @@ in the same shell (or included in your launchd plist as `EnvironmentVariables`).
 
 ## Planned / not yet built
 
-- **Parallel multi-checkout local dev** — being able to run several local checkouts at
-  once for fast iteration/experimentation. Intended approach: **docker-compose + a
-  Makefile**. Not built yet. Until it lands, isolate with a `TQ_CONFIG` dev profile
-  (see [Use your own data](#use-your-own-data-read-this-first)). **Don't** invent an
-  ad-hoc isolation scheme that would conflict with this direction.
+- **Playwright end-to-end tests** — intentionally deferred; the `cmux-browser` skill
+  is the current interactive verification path.

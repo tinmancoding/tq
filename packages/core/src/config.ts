@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync } from "node:fs";
 import { parse as parseToml } from "smol-toml";
 
@@ -49,6 +50,29 @@ export interface TqConfig {
   secrets: Record<string, { env?: string; value?: string }>;
 }
 
+/** Resolve the repo checkout root from this module's own location. */
+function repoRoot(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+}
+
+/**
+ * Base directory for all runtime data files (DB, attachments, run/).
+ * Resolution order: $TQ_DATA → <repoRoot>/data
+ */
+export function dataDir(): string {
+  return process.env.TQ_DATA ? expandHome(process.env.TQ_DATA) : join(repoRoot(), "data");
+}
+
+/**
+ * Directory that holds config.toml and tq.env.
+ * Resolution order: dirname($TQ_CONFIG) → <repoRoot>/config
+ */
+export function configDir(): string {
+  return process.env.TQ_CONFIG
+    ? dirname(expandHome(process.env.TQ_CONFIG))
+    : join(repoRoot(), "config");
+}
+
 /** Expand a leading `~` to the user's home directory. */
 export function expandHome(p: string): string {
   if (p === "~") return homedir();
@@ -57,7 +81,7 @@ export function expandHome(p: string): string {
 }
 
 export function defaultConfigPath(): string {
-  return join(homedir(), ".config", "tq", "config.toml");
+  return process.env.TQ_CONFIG ?? join(repoRoot(), "config", "config.toml");
 }
 
 function deepMerge<T>(base: T, override: unknown): T {
@@ -77,9 +101,9 @@ export function defaultConfig(): TqConfig {
   return {
     daemon: {
       host: "127.0.0.1",
-      port: 7788,
-      db_path: "~/.local/share/tq/tq.db",
-      attachments_dir: "~/.local/share/tq/attachments",
+      port: 7799,
+      db_path: join(dataDir(), "tq.db"),
+      attachments_dir: join(dataDir(), "attachments"),
     },
     triage: {
       provider: "amazon-bedrock",
@@ -128,7 +152,7 @@ export function defaultConfig(): TqConfig {
  * Path resolution order: explicit arg → $TQ_CONFIG → default path.
  */
 export function loadConfig(configPath?: string): TqConfig {
-  const path = configPath ?? process.env.TQ_CONFIG ?? defaultConfigPath();
+  const path = configPath ?? defaultConfigPath();
   let merged = defaultConfig();
   if (existsSync(path)) {
     const raw = parseToml(readFileSync(path, "utf8"));
@@ -154,4 +178,4 @@ export function resolveSecret(cfg: TqConfig, name: string): string | undefined {
   return entry.value;
 }
 
-void resolve; // reserved for future relative-path handling
+

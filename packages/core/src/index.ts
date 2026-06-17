@@ -56,6 +56,8 @@ export {
   loadConfig,
   defaultConfig,
   defaultConfigPath,
+  dataDir,
+  configDir,
   daemonBaseUrl,
   resolveSecret,
   expandHome,
