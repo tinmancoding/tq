@@ -1,0 +1,26 @@
+{
+  "name": "@tq/ext-atlassian",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.13",
+    "@tq/contract": "workspace:*",
+    "@tq/extension-sdk": "workspace:*",
+    "pdf-parse": "^1.1.1",
+    "sharp": "^0.35.1",
+    "turndown": "^7.2.0",
+    "turndown-plugin-gfm": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.4",
+    "@types/turndown": "^5.0.5"
+  }
+}
