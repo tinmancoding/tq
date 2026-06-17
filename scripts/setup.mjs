@@ -213,20 +213,27 @@ if (loaded) {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Health check
+// 7. Health check (retry — the daemon takes a moment to bind, esp. first run)
 // ---------------------------------------------------------------------------
 console.log("\nWaiting for daemon to start…");
-await new Promise((r) => setTimeout(r, 1200));
-
-try {
-  const res = await fetch("http://127.0.0.1:7788/api/health");
-  if (res.ok) {
-    console.log("✓ daemon health OK (http://127.0.0.1:7788)");
-  } else {
-    console.log("❌ daemon returned HTTP", res.status);
+let healthy = false;
+for (let attempt = 0; attempt < 15; attempt++) {
+  await new Promise((r) => setTimeout(r, 1000));
+  try {
+    const res = await fetch("http://127.0.0.1:7788/api/health");
+    if (res.ok) {
+      healthy = true;
+      break;
+    }
+  } catch {
+    // not up yet — keep polling
   }
-} catch {
-  console.log("❌ daemon not reachable at http://127.0.0.1:7788/api/health (may still be starting)");
+}
+if (healthy) {
+  console.log("✓ daemon health OK (http://127.0.0.1:7788)");
+} else {
+  console.log("❌ daemon not reachable at http://127.0.0.1:7788/api/health");
+  console.log("   Check logs:", join(dataRoot, "run", "daemon.err"));
 }
 
 // ---------------------------------------------------------------------------

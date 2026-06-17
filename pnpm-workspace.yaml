@@ -10,7 +10,8 @@ minimumReleaseAgeExclude:
   - '@earendil-works/pi-coding-agent@0.79.3'
   - '@earendil-works/pi-tui@0.79.3'
 allowBuilds:
-  '@google/genai': set this to true or false
-  esbuild: set this to true or false
-  msw: set this to true or false
-  protobufjs: set this to true or false
+  '@google/genai': true
+  better-sqlite3: true
+  esbuild: true
+  msw: true
+  protobufjs: true

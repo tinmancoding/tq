@@ -18,17 +18,22 @@ try {
   process.exit(1);
 }
 
-// Wait briefly for the daemon to bind
-await new Promise((r) => setTimeout(r, 1200));
-
-// Health check
-try {
-  const res = await fetch("http://127.0.0.1:7788/api/health");
-  if (res.ok) {
-    console.log("✓ daemon health OK (http://127.0.0.1:7788)");
-  } else {
-    console.log("❌ daemon returned HTTP", res.status);
+// Wait for the daemon to bind, then health-check (retry — restart isn't instant)
+let healthy = false;
+for (let attempt = 0; attempt < 15; attempt++) {
+  await new Promise((r) => setTimeout(r, 1000));
+  try {
+    const res = await fetch("http://127.0.0.1:7788/api/health");
+    if (res.ok) {
+      healthy = true;
+      break;
+    }
+  } catch {
+    // not up yet — keep polling
   }
-} catch {
+}
+if (healthy) {
+  console.log("✓ daemon health OK (http://127.0.0.1:7788)");
+} else {
   console.log("❌ daemon not reachable at http://127.0.0.1:7788/api/health");
 }
