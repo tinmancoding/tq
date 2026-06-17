@@ -8,7 +8,7 @@ import {
   triageExtension,
   type TriageEngine,
   type TriageInput,
-  type TriageSearchFn,
+  type TriageInjected,
 } from "@tq/ext-triage";
 import { buildServer, type TqServer } from "../server.js";
 
@@ -52,9 +52,9 @@ class FakeEngine implements TriageEngine {
   constructor(
     private readonly out: TriageResult | (() => Promise<TriageResult>),
   ) {}
-  async triage(_input: TriageInput, searchTasks: TriageSearchFn): Promise<TriageResult> {
+  async triage(_input: TriageInput, injected: TriageInjected): Promise<TriageResult> {
     this.calls++;
-    await searchTasks("login", 5); // exercise the public /api/search path
+    await injected.searchTasks("login", 5); // exercise the public /api/search path
     this.searched++;
     return typeof this.out === "function" ? this.out() : this.out;
   }
@@ -145,6 +145,48 @@ describe("triage as an extension (Phase G proof)", () => {
     expect(store.intake.get(id)!.status).toBe("new");
     expect(store.context.get("intake", id)!.triage_error).toBe("bedrock throttled");
     // Not dead-lettered: the handler swallowed the error so retriage can resume.
+    expect(store.subscriptions.get("triage")!.dead_letters).toHaveLength(0);
+  });
+
+  it("pass_timeout_ms: a never-resolving engine trips the timeout, leaves intake 'new' with error persisted (Phase E)", async () => {
+    // Never-resolving stub — simulates a hung LLM session.
+    const hungEngine: TriageEngine = {
+      triage(): Promise<TriageResult> {
+        return new Promise(() => {
+          /* intentionally never resolves */
+        });
+      },
+    };
+
+    // Boot with a very short timeout so the test completes in milliseconds.
+    server = buildServer({
+      store,
+      config: cfg(),
+      extensions: [
+        triageExtension({
+          engine: hungEngine,
+          autoCreateConfidence: 0.8,
+          passTimeoutMs: 50, // trip immediately in test
+        }),
+      ],
+      coreFetch: injectFetch(() => server),
+    });
+    server.tqExtensionHost.start();
+
+    const cap = await server.inject({
+      method: "POST",
+      url: "/api/intake",
+      payload: { text: "test abort" },
+    });
+    const id = cap.json().id as string;
+    await server.tqExtensionHost.idle();
+
+    // Intake must remain 'new' (not dead-lettered or stuck in limbo)
+    expect(store.intake.get(id)!.status).toBe("new");
+    // Error must be persisted for debugging
+    const errMsg = store.context.get("intake", id)!.triage_error as string;
+    expect(errMsg).toMatch(/timed out/i);
+    // Not dead-lettered — the catch path swallowed the error
     expect(store.subscriptions.get("triage")!.dead_letters).toHaveLength(0);
   });
 });

@@ -6,7 +6,14 @@ import {
 } from "@tq/extension-sdk";
 import type { CoreClient } from "@tq/contract";
 import { decideGate } from "./gate.js";
-import type { TriageEngine, TriageImage, TriageSearchHit } from "./engine.js";
+import type {
+  AttachmentResult,
+  AtlassianClosures,
+  TriageEngine,
+  TriageImage,
+  TriageInjected,
+  TriageSearchHit,
+} from "./engine.js";
 
 export interface TriageExtensionOptions {
   /** The LLM engine (constructed by the host with AWS/pi access). */
@@ -19,6 +26,34 @@ export interface TriageExtensionOptions {
    * transport-agnostic.
    */
   loadImages?: (intakeId: string) => TriageImage[] | Promise<TriageImage[]>;
+  /**
+   * Per-pass wall-clock timeout in ms (default 180 000).
+   * When the timeout fires the triage call is rejected and the existing
+   * catch/failure path runs (trace+error persisted, intake left 'new').
+   * Inject a small value in tests (e.g. 50) to exercise the abort path.
+   */
+  passTimeoutMs?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Wall-clock bound helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Race `promise` against a timeout that rejects after `ms` milliseconds.
+ * Clears the timer if the promise resolves/rejects first.
+ */
+function runWithTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timerId = setTimeout(
+      () => reject(new Error(`triage pass timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timerId);
+  });
 }
 
 /**
@@ -54,12 +89,35 @@ async function handleIntake(
   let trace: unknown[] = [];
   try {
     const images = (await opts.loadImages?.(id)) ?? [];
-    const result = await opts.engine.triage(
-      { intake, images },
-      (q, limit) => searchTasks(ctx.core, q, limit),
-      (t) => {
-        trace = t;
-      },
+
+    // Probe the Atlassian connector (design §3.1). If the health check fails
+    // (404, network error, etc.) the connector is disabled for this pass.
+    const atlassianEnabled = await probeAtlassian(ctx.core);
+
+    // Build injected closures for the engine (design §3.1).
+    const atlassian: AtlassianClosures | undefined = atlassianEnabled
+      ? buildAtlassianClosures(ctx.core)
+      : undefined;
+
+    const injected: TriageInjected = {
+      searchTasks: (q, limit) => searchTasks(ctx.core, q, limit),
+      atlassianEnabled,
+      atlassian,
+    };
+
+    // Per-pass wall-clock bound (Q12). When the timeout fires the rejection is
+    // caught by the outer catch block, which persists trace+error and leaves
+    // the intake 'new' so a manual retriage re-runs it.
+    const passTimeoutMs = opts.passTimeoutMs ?? 180_000;
+    const result = await runWithTimeout(
+      opts.engine.triage(
+        { intake, images },
+        injected,
+        (t) => {
+          trace = t;
+        },
+      ),
+      passTimeoutMs,
     );
 
     await ctx.core.context.set("intake", id, "triage", result);
@@ -91,6 +149,71 @@ async function handleIntake(
     if (trace.length > 0) await ctx.core.context.set("intake", id, "triage_trace", trace).catch(() => {});
     await ctx.core.context.set("intake", id, "triage_error", msg).catch(() => {});
   }
+}
+
+/**
+ * Probe the Atlassian connector by calling GET /ext/atlassian/health.
+ * Returns true if the connector is reachable; false if absent or erroring.
+ */
+async function probeAtlassian(core: CoreClient): Promise<boolean> {
+  try {
+    await core.request("GET", "/ext/atlassian/health");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Build the 5 Atlassian closures, each calling /ext/atlassian/* and returning
+ * clean error text (never throwing) on failure (design §3.1).
+ */
+export function buildAtlassianClosures(core: CoreClient): AtlassianClosures {
+  async function atlGet(path: string, toolName: string): Promise<unknown> {
+    try {
+      return await core.request("GET", path);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return `[${toolName} error] ${msg}`;
+    }
+  }
+
+  return {
+    async jira_get(ref: string, include?: string[]): Promise<unknown> {
+      const q = new URLSearchParams();
+      if (include && include.length > 0) q.set("include", include.join(","));
+      const qs = q.toString();
+      return atlGet(`/ext/atlassian/jira/${encodeURIComponent(ref)}${qs ? `?${qs}` : ""}`, "jira_get");
+    },
+
+    async jira_search(jql: string, limit: number): Promise<unknown> {
+      const params = `jql=${encodeURIComponent(jql)}&limit=${limit}`;
+      return atlGet(`/ext/atlassian/jira/search?${params}`, "jira_search");
+    },
+
+    async confluence_get(ref: string, include?: string[]): Promise<unknown> {
+      const q = new URLSearchParams();
+      if (include && include.length > 0) q.set("include", include.join(","));
+      const qs = q.toString();
+      return atlGet(`/ext/atlassian/confluence/${encodeURIComponent(ref)}${qs ? `?${qs}` : ""}`, "confluence_get");
+    },
+
+    async confluence_search(cql: string, limit: number): Promise<unknown> {
+      const params = `cql=${encodeURIComponent(cql)}&limit=${limit}`;
+      return atlGet(`/ext/atlassian/confluence/search?${params}`, "confluence_search");
+    },
+
+    async fetch_attachment(ref: string, mimeHint: string): Promise<AttachmentResult | string> {
+      const q = new URLSearchParams({ ref });
+      if (mimeHint) q.set("mimeHint", mimeHint);
+      try {
+        return await core.request<AttachmentResult>("GET", `/ext/atlassian/attachment?${q.toString()}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `[fetch_attachment error] ${msg}`;
+      }
+    },
+  };
 }
 
 async function searchTasks(

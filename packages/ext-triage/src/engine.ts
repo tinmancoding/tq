@@ -27,6 +27,36 @@ export interface TriageSearchHit {
 
 export type TriageSearchFn = (query: string, limit: number) => Promise<TriageSearchHit[]>;
 
+/** Result shape returned by the fetch_attachment closure. */
+export interface AttachmentResult {
+  text?: string;
+  images?: Array<{ mime: string; dataBase64: string }>;
+}
+
+/**
+ * The 5 Atlassian closures injected into the engine (design §3.1).
+ * Each returns the normalized result object or a plain error-text string
+ * (never throws into the agent loop).
+ */
+export interface AtlassianClosures {
+  jira_get(ref: string, include?: string[]): Promise<unknown>;
+  jira_search(jql: string, limit: number): Promise<unknown>;
+  confluence_get(ref: string, include?: string[]): Promise<unknown>;
+  confluence_search(cql: string, limit: number): Promise<unknown>;
+  fetch_attachment(ref: string, mimeHint: string): Promise<AttachmentResult | string>;
+}
+
+/**
+ * Everything the engine needs beyond the raw intake.
+ * Passed as a single object so future additions don't change the positional
+ * arity of `triage()`.
+ */
+export interface TriageInjected {
+  searchTasks: TriageSearchFn;
+  atlassianEnabled: boolean;
+  atlassian?: AtlassianClosures;
+}
+
 /**
  * Abstraction over "run an LLM triage pass". The real implementation (in the
  * daemon) drives a pi SDK session against Bedrock with search_tasks/emit_triage
@@ -35,7 +65,7 @@ export type TriageSearchFn = (query: string, limit: number) => Promise<TriageSea
 export interface TriageEngine {
   triage(
     input: TriageInput,
-    searchTasks: TriageSearchFn,
+    injected: TriageInjected,
     onTrace?: TriageTraceSink,
   ): Promise<TriageResult>;
 }
